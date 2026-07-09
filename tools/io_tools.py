@@ -1,5 +1,6 @@
 import os
 import re
+import ast
 import threading
 from typing import Optional
 
@@ -167,3 +168,62 @@ def search_grep(query: str, path: str = ".", is_regex: bool = False, case_insens
         return "\n".join(results[:100]) # Cap at 100 results to avoid context bloating
     except Exception as e:
         return f"Error executing search: {e}"
+
+
+def get_outline(filename: str) -> str:
+    """
+    Parses a Python file and returns a high-level outline of its structure,
+    including classes, methods, functions, and imports. This helps the agent
+    understand the module layout without reading the entire source code.
+    """
+    try:
+        # Resolve real path to ensure it's in the workspace
+        abs_path = os.path.abspath(filename)
+        cwd = os.getcwd()
+        if not abs_path.startswith(cwd):
+            return "Error: Access denied. Cannot access files outside the project directory."
+
+        if not os.path.exists(abs_path):
+            return f"Error: File '{filename}' does not exist."
+
+        if not filename.endswith(".py"):
+            return "Error: AST parsing is only supported for Python (.py) files."
+
+        with open(abs_path, "r", encoding="utf-8") as f:
+            source = f.read()
+
+        tree = ast.parse(source, filename=filename)
+        
+        outline = []
+        outline.append(f"Structure outline for '{filename}':")
+        
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                for name in node.names:
+                    outline.append(f"  [IMPORT] import {name.name}")
+            elif isinstance(node, ast.ImportFrom):
+                names = ", ".join(n.name for n in node.names)
+                outline.append(f"  [IMPORT] from {node.module or ''} import {names}")
+            elif isinstance(node, ast.FunctionDef):
+                args = ", ".join(arg.arg for arg in node.args.args)
+                doc = f" - \"{ast.get_docstring(node).splitlines()[0]}\"" if ast.get_docstring(node) else ""
+                outline.append(f"  [FUNCTION] def {node.name}({args}){doc}")
+            elif isinstance(node, ast.ClassDef):
+                doc = f" - \"{ast.get_docstring(node).splitlines()[0]}\"" if ast.get_docstring(node) else ""
+                outline.append(f"  [CLASS] class {node.name}{doc}")
+                
+                # Walk the class body to find methods
+                for subnode in node.body:
+                    if isinstance(subnode, ast.FunctionDef):
+                        sub_args = ", ".join(arg.arg for arg in subnode.args.args)
+                        sub_doc = f" - \"{ast.get_docstring(subnode).splitlines()[0]}\"" if ast.get_docstring(subnode) else ""
+                        outline.append(f"    [METHOD] def {subnode.name}({sub_args}){sub_doc}")
+                        
+        if len(outline) == 1:
+            return f"Notice: No classes, functions, or imports found in '{filename}'."
+            
+        return "\n".join(outline)
+    except SyntaxError as se:
+        return f"Error parsing Python syntax in '{filename}': {se}"
+    except Exception as e:
+        return f"Error getting outline for '{filename}': {e}"

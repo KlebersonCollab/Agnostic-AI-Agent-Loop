@@ -157,6 +157,20 @@ TOOLS_METADATA = [
             },
             "required": ["query"]
         }
+    ),
+    ToolDefinition(
+        name="get_outline",
+        description="Parses a Python file and returns a structured outline of its imports, classes, methods, and functions. Use this to quickly understand the structure of a Python file without reading its entire contents.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "The relative path to the Python file to outline, e.g., 'agent.py'"
+                }
+            },
+            "required": ["filename"]
+        }
     )
 ]
 
@@ -167,6 +181,7 @@ TOOLS_MAP = {
     "write_file": io_tools.write_file,
     "patch_file": io_tools.patch_file,
     "search_grep": io_tools.search_grep,
+    "get_outline": io_tools.get_outline,
     "calculate": math_tools.calculate,
     "spawn_subagents_parallel": multi_agent.spawn_subagents_parallel
 }

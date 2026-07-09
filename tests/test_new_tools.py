@@ -1,5 +1,5 @@
 import os
-from tools.io_tools import search_grep, patch_file, write_file, read_file
+from tools.io_tools import search_grep, patch_file, write_file, read_file, get_outline
 
 def test_search_grep():
     test_file = "test_search_temp.txt"
@@ -64,6 +64,37 @@ def test_patch_file_duplicate_target():
         assert "error" in dup_result.lower()
         assert "found 2 times" in dup_result.lower()
         
+    finally:
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+
+def test_get_outline():
+    test_file = "test_outline_temp.py"
+    content = """import os
+from sys import argv
+
+class MyClass:
+    \"\"\"This is MyClass docstring\"\"\"
+    def my_method(self, arg1):
+        \"\"\"Method docstring\"\"\"
+        pass
+
+def my_function(param1, param2):
+    \"\"\"Function docstring\"\"\"
+    return True
+"""
+    try:
+        write_file(test_file, content)
+        
+        result = get_outline(test_file)
+        
+        assert "Structure outline for 'test_outline_temp.py':" in result
+        assert "[IMPORT] import os" in result
+        assert "[IMPORT] from sys import argv" in result
+        assert "[CLASS] class MyClass - \"This is MyClass docstring\"" in result
+        assert "[METHOD] def my_method(self, arg1) - \"Method docstring\"" in result
+        assert "[FUNCTION] def my_function(param1, param2) - \"Function docstring\"" in result
     finally:
         if os.path.exists(test_file):
             os.remove(test_file)
