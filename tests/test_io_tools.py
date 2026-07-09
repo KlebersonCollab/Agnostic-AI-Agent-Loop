@@ -3,7 +3,7 @@ from tools.io_tools import read_file, write_file, list_project_files
 
 def test_write_and_read_file():
     test_file = "test_io_temp.txt"
-    test_content = "Hello, SOLID ReAct Agent World!"
+    test_content = "Line 1\nLine 2\nLine 3\nLine 4\n"
     
     try:
         # Test writing
@@ -14,6 +14,19 @@ def test_write_and_read_file():
         # Test reading
         read_result = read_file(test_file)
         assert read_result == test_content
+
+        # Test reading specific line ranges (1-indexed, inclusive)
+        # Line 2 to 3 -> "Line 2\nLine 3\n"
+        range_result = read_file(test_file, start_line=2, end_line=3)
+        assert range_result == "Line 2\nLine 3\n"
+        
+        # Only start_line
+        range_result_start = read_file(test_file, start_line=3)
+        assert range_result_start == "Line 3\nLine 4\n"
+        
+        # Only end_line
+        range_result_end = read_file(test_file, end_line=2)
+        assert range_result_end == "Line 1\nLine 2\n"
     finally:
         # Cleanup
         if os.path.exists(test_file):

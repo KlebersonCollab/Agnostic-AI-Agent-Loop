@@ -1,5 +1,6 @@
 import os
 import threading
+from typing import Optional
 
 # Thread safety lock for writing operations
 _file_write_lock = threading.Lock()
@@ -34,8 +35,8 @@ def list_project_files(path: str = ".") -> str:
         return f"Error listing files: {e}"
 
 
-def read_file(filename: str) -> str:
-    """Reads the entire content of a file."""
+def read_file(filename: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> str:
+    """Reads the content of a file, supporting optional start_line and end_line parameters (1-indexed, inclusive)."""
     try:
         # Resolve real path to ensure it's in the workspace
         abs_path = os.path.abspath(filename)
@@ -47,7 +48,23 @@ def read_file(filename: str) -> str:
             return f"Error: File '{filename}' does not exist."
             
         with open(abs_path, "r", encoding="utf-8") as f:
-            return f.read()
+            lines = f.readlines()
+            
+        # Apply line range if provided
+        if start_line is not None or end_line is not None:
+            # 1-indexed, inclusive to 0-indexed, exclusive slice conversion
+            s = (start_line - 1) if start_line is not None else 0
+            s = max(0, min(s, len(lines)))
+            
+            e = end_line if end_line is not None else len(lines)
+            e = max(s, min(e, len(lines)))
+            
+            selected_lines = lines[s:e]
+            if not selected_lines:
+                return f"Notice: No lines found in the requested range [{start_line or 1}:{end_line or 'end'}]."
+            return "".join(selected_lines)
+            
+        return "".join(lines)
     except Exception as e:
         return f"Error reading file '{filename}': {e}"
 

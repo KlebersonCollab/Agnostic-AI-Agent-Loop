@@ -24,13 +24,21 @@ TOOLS_METADATA = [
     ),
     ToolDefinition(
         name="read_file",
-        description="Read the textual content of any file in the workspace. Useful for discovering file content or code details.",
+        description="Read the textual content of any file in the workspace. Supports reading specific segments via optional start_line and end_line parameters (1-indexed, inclusive).",
         parameters={
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
                     "description": "The relative path to the file to read, e.g., 'pyproject.toml' or 'main.py'"
+                },
+                "start_line": {
+                    "type": "integer",
+                    "description": "Optional line number to start reading from (1-indexed, inclusive)."
+                },
+                "end_line": {
+                    "type": "integer",
+                    "description": "Optional line number to end reading at (1-indexed, inclusive)."
                 }
             },
             "required": ["filename"]
