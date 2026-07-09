@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 from ai_provider import get_provider
 from agent import Agent, AgentListener
-from tools import TOOLS_METADATA, TOOLS_MAP
+from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
 
 # --- ANSI escape codes for terminal coloring ---
 class Colors:
@@ -84,7 +84,7 @@ def run_cli():
     parser.add_argument(
         "--max-steps", 
         type=int, 
-        default=10,
+        default=15,
         help="Maximum loop iterations/steps"
     )
 
@@ -117,6 +117,9 @@ def run_cli():
     except Exception as e:
         print_color(f"Initialization Error: {e}", Colors.RED)
         sys.exit(1)
+
+    # Set active provider for tools (subagents)
+    set_active_provider(provider)
 
     print_color(f"\n🚀 Starting Agent Session...", Colors.HEADER + Colors.BOLD)
     print_color(f"Objective: {prompt}\n", Colors.CYAN)

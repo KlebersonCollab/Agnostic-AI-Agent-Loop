@@ -1,6 +1,6 @@
 # Agnostic AI Agent Loop
 
-Um framework de agente de IA **autônomo e agnóstico a provedores**, capaz de executar agentes que raciocinam passo a passo e utilizam ferramentas para interagir com o sistema de arquivos e realizar cálculos. Suporta múltiplos provedores de LLM (OpenAI, Gemini, Anthropic, OpenRouter, Ollama, Groq, DeepSeek etc.) através de uma única interface unificada.
+Um framework de agente de IA **autônomo e agnóstico a provedores**, capaz de executar agentes que raciocinam passo a passo e utilizam ferramentas para interagir com o sistema de arquivos, realizar cálculos e — de forma avançada — **orquestrar subagentes em paralelo**. Suporta múltiplos provedores de LLM (OpenAI, Gemini, Anthropic, OpenRouter, Ollama, Groq, DeepSeek etc.) através de uma única interface unificada.
 
 > 💡 O projeto já vem configurado no `.env.example` para usar o **OpenRouter** com o modelo `anthropic/claude-3.5-sonnet`, mas qualquer provedor suportado pode ser utilizado via linha de comando ou variáveis de ambiente.
 
@@ -10,11 +10,14 @@ Este projeto implementa um **loop de agente autônomo** que:
 
 - **Raciocina passo a passo** antes de tomar ações (e explica o seu raciocínio).
 - **Utiliza ferramentas** para listar/ler/escrever arquivos e calcular expressões matemáticas.
+- **Orquestra subagentes em paralelo** (`spawn_subagents_parallel`) para dividir tarefas grandes em partes menores executadas simultaneamente.
 - **Suporta múltiplos provedores de LLM** por meio de uma camada de abstração unificada (`BaseLLMProvider` + factory `get_provider`).
 - **É executado localmente**, com controle total sobre o ambiente de execução.
 - Possui uma **interface de observação** (`AgentListener`) que desacopla a lógica do agente da apresentação (terminal, web, GUI etc.).
 
 ## 🏗️ Arquitetura
+
+O projeto é organizado em módulos, cada um com uma responsabilidade bem definida:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -33,9 +36,9 @@ Este projeto implementa um **loop de agente autônomo** que:
 │  │                      agent.py                        │           │
 │  │  ┌─────────────┐    ┌─────────────┐    ┌──────────┐  │           │
 │  │  │   Agent     │───▶│  Provider   │───▶│  Tools   │  │           │
-│  │  │   Loop      │    │  Factory    │    │(FS/Calc) │  │           │
-│  │  └─────────────┘    └──────┬──────┘    └──────────┘  │           │
-│  │       AgentListener (ABC)  │                          │           │
+│  │  │   Loop      │    │  Factory    │    │(FS/Calc/ │  │           │
+│  │  └─────────────┘    └──────┬──────┘    │ Subagents)│  │           │
+│  │       AgentListener (ABC)  │          └──────────┘  │           │
 │  └────────────────────────────┼──────────────────────────┘           │
 │                                │                                      │
 │              ┌─────────────────┼──────────────────┐                  │
@@ -48,14 +51,16 @@ Este projeto implementa um **loop de agente autônomo** que:
 
 ### Componentes Principais
 
-| Arquivo | Descrição |
+| Arquivo / Pacote | Descrição |
 |---------|-----------|
 | `main.py` | Ponto de entrada; apenas invoca `run_cli()` de `cli.py` |
-| `cli.py` | Parsing de argumentos de linha de comando, `ConsoleAgentListener` (saída colorida) e orquestração da sessão |
+| `cli.py` | Parsing de argumentos de linha de comando (via `argparse`), `ConsoleAgentListener` (saída colorida) e orquestração da sessão |
 | `agent.py` | Loop principal do agente (`Agent`), interface `AgentListener` e o `SYSTEM_PROMPT` |
 | `ai_provider.py` | Classe base abstrata `BaseLLMProvider` + implementações para os provedores de LLM e a factory `get_provider()` |
-| `tools.py` | Definições de ferramentas (`TOOLS_METADATA`, `TOOLS_MAP`) e funções (listar, ler, escrever arquivos; calcular) |
+| `tools/` | Pacote de ferramentas do agente, dividido em módulos: `io_tools.py` (ops. de arquivo), `math_tools.py` (cálculo) e `multi_agent.py` (orquestração de subagentes). O `__init__.py` expõe `TOOLS_METADATA`, `TOOLS_MAP` e `set_active_provider` |
 | `pyproject.toml` | Metadados do projeto e dependências |
+
+> 📝 **Observação:** O `pyproject.toml` ainda usa valores *placeholder* (`name = "teste"`, `description = "Add your description here"`). Lembre-se de ajustá-los antes de publicar/distribuir o pacote.
 
 ## 🚀 Início Rápido
 
@@ -71,7 +76,7 @@ Este projeto implementa um **loop de agente autônomo** que:
 git clone <repo-url>
 cd <diretorio-do-projeto>
 
-# Usando uv (recomendado)
+# Usando uv (recomendado — gerenciador usado pelo projeto, veja uv.lock)
 uv sync
 
 # Ou usando pip
@@ -114,30 +119,29 @@ python main.py --provider ollama --model llama3.2 --base-url http://localhost:11
 python main.py --provider anthropic --model claude-3-5-sonnet-20241022
 ```
 
-### Opções de Linha de Comando
+## 💻 Linha de Comando (CLI)
 
-| Opção | Descrição | Padrão |
-|-------|-----------|--------|
-| `--provider` | Provedor de LLM: `openai`, `gemini`, `anthropic`, `openrouter`, `openai_compatible` (ollama, groq, deepseek) | `gemini` (ou `AGENT_PROVIDER`) |
-| `--model` | Nome do modelo | `gemini-2.5-flash` (ou `AGENT_MODEL`) |
-| `--api-key` | Chave de API (opcional, recorre às variáveis de ambiente) | - |
-| `--base-url` | URL base customizada para endpoints compatíveis com OpenAI | - |
-| `--prompt` | Tarefa para o agente (modo interativo se omitido) | - |
-| `--max-steps` | Número máximo de passos de raciocínio | `10` |
+A interface de linha de comando é construída com a biblioteca padrão **`argparse`** (sem dependências de terceiros como Click/Typer). É um **único comando plano** — não há subcomandos nem argumentos posicionais; todas as opções são *flags* opcionais. Se `--prompt` não for informado, o programa entra em **modo interativo** e solicita a entrada via `input()`.
 
-### Variáveis de Ambiente
+| Opção | Tipo | Padrão | Override por env var | Descrição |
+|-------|------|--------|----------------------|-----------|
+| `--provider` | `str` | `gemini` | `AGENT_PROVIDER` | Provedor de LLM: `openai`, `gemini`, `anthropic`, `openrouter`, `openai_compatible` (Ollama/Groq) |
+| `--model` | `str` | `gemini-2.5-flash` | `AGENT_MODEL` | Nome do modelo (ex.: `gemini-2.5-flash`, `gpt-4o-mini`, `claude-3-5-sonnet-20241022`) |
+| `--api-key` | `str` | *(nenhum)* | — | Chave de API do provedor (opcional; recorre às variáveis de ambiente) |
+| `--base-url` | `str` | *(nenhum)* | — | URL base customizada para endpoints compatíveis com OpenAI (Ollama, Groq, locais) |
+| `--prompt` | `str` | *(nenhum)* | — | Tarefa para o agente. Se omitido, inicia o modo interativo |
+| `--max-steps` | `int` | `25` | — | Número máximo de iterações/passos do loop do agente |
 
-Além das chaves de API, o arquivo `.env` (ou o ambiente) pode definir:
+> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps`.
 
-| Variável | Descrição | Padrão |
-|----------|-----------|--------|
-| `AGENT_PROVIDER` | Provedor padrão usado quando `--provider` não é informado | `gemini` |
-| `AGENT_MODEL` | Modelo padrão usado quando `--model` não é informado | `gemini-2.5-flash` |
-| `OPENAI_API_KEY` | Chave da OpenAI | - |
-| `GEMINI_API_KEY` | Chave do Gemini | - |
-| `ANTHROPIC_API_KEY` | Chave da Anthropic | - |
-| `OPENROUTER_API_KEY` | Chave do OpenRouter | - |
-| `OPENAI_BASE_URL` | URL base para provedores compatíveis com OpenAI | - |
+### Fluxo de Execução
+
+1. Faz o parsing dos argumentos via `argparse`.
+2. Se `--prompt` estiver vazio, imprime um banner de boas-vindas e lê o prompt interativamente do stdin (trata `Ctrl+C`/`EOF` com elegância, encerrando).
+3. Inicializa o provedor de IA via `get_provider(provider_name, model_name, api_key, base_url)`; em caso de falha, imprime erro e sai.
+4. Registra o provedor para as ferramentas via `set_active_provider(provider)` (definido em `tools/multi_agent.py` e reexportado por `tools/__init__.py`).
+5. Cria um `ConsoleAgentListener` (saída colorida no terminal) e um `Agent` com as ferramentas disponíveis e `max_steps`.
+6. Executa o loop do agente com `agent.run(prompt)`.
 
 ## 🛠️ Provedores Suportados
 
@@ -154,16 +158,57 @@ A factory `get_provider()` mapeia os nomes abaixo para as respectivas implementa
 | `groq` | `OpenAICompatibleProvider` | Alias |
 | `deepseek` | `OpenAICompatibleProvider` | Alias |
 
+> 🔌 Todos os provedores compatíveis com a API OpenAI (`OpenAICompatibleProvider`) aceitam `--base-url` e `--api-key` customizados, o que permite plugar qualquer endpoint OpenAI-like (incluindo servidores locais).
+
 ## 🧰 Ferramentas Disponíveis
 
-O agente tem acesso a estas ferramentas (definidas em `tools.py`):
+O agente tem acesso a estas ferramentas (definidas no pacote `tools/` e expostas via `tools/__init__.py`):
 
 | Ferramenta | Descrição | Parâmetros |
 |------------|-----------|------------|
 | `list_project_files` | Lista arquivos/diretórios recursivamente (ignora `.git`, `.venv`, `__pycache__`, `.pytest_cache`, `.idea`, `.vscode`) | `path` (opcional, padrão: ".") |
 | `read_file` | Lê o conteúdo de um arquivo (restrito ao diretório do projeto) | `filename` (obrigatório) |
-| `write_file` | Cria/sobrescreve um arquivo com conteúdo (restrito ao diretório do projeto; cria diretórios pais) | `filename`, `content` (ambos obrigatórios) |
+| `write_file` | Cria/sobrescreve um arquivo com conteúdo (restrito ao diretório do projeto; cria diretórios pais; *thread-safe*) | `filename`, `content` (ambos obrigatórios) |
 | `calculate` | Avalia expressões matemáticas (apenas números e operadores básicos) | `expression` (obrigatório) |
+| `spawn_subagents_parallel` | **Orquestração multi-agente**: dispara vários subagentes especializados em paralelo para executar tarefas concorrentemente | `tasks` (obrigatório): lista de `{"role_description", "prompt"}` |
+
+### Como as ferramentas são registradas
+
+Não há decorators neste código. As ferramentas são expostas ao agente através de **duas estruturas de nível de módulo** (definidas em `tools/__init__.py`) que devem permanecer sincronizadas:
+
+1. **`TOOLS_METADATA`** — uma `List[ToolDefinition]` (modelos Pydantic de `ai_provider.py`). É o *schema* enviado ao LLM para que ele conheça o `name`, `description` e o JSON-Schema `parameters` de cada ferramenta.
+2. **`TOOLS_MAP`** — um `Dict[str, Callable]` mapeando cada `name` → sua função Python real. O loop do `Agent` procura `tool_name` em `tools_map` e chama `tools_map[tool_name](**tool_args)` dinamicamente.
+
+Se um nome de ferramenta aparece nos metadados mas não no mapa, o agente retorna `"Tool '...' is not registered/available."`.
+
+### 🔀 Orquestração Multi-agente (`spawn_subagents_parallel`)
+
+Esta ferramenta permite que o agente principal divida uma tarefa grande em partes menores e as delega a **subagentes especializados** que rodam em paralelo (via `ThreadPoolExecutor`). Isso mantém o contexto do agente pai limpo e focado, enquanto o trabalho pesado é feito simultaneamente.
+
+Como funciona internamente (`tools/multi_agent.py`):
+
+1. O agente pai chama `spawn_subagents_parallel` com uma lista de tarefas.
+2. Para cada tarefa, um `Agent` filho é criado reutilizando o **mesmo provedor ativo** (`set_active_provider`, definido em `cli.py` antes de iniciar a sessão) e um `SYSTEM_PROMPT` estendido com a `role_description`.
+3. Cada subagente recebe um subconjunto de ferramentas (todas, exceto `spawn_subagents_parallel`, evitando loops aninhados infinitos) e executa seu próprio loop de raciocínio com `max_steps=10`.
+4. A execução é acompanhada **ao vivo** no terminal: o `CollectingAgentListener` imprime, em tempo real, cada passo de raciocínio, chamada de ferramenta e saída — usando uma **cor distinta por subagente** (ciano, magenta, amarelo, azul, verde, em ciclo) e um prefixo `[Subagent: <role>]` que identifica o papel. Ao final, um bloco de resumo de cada subagente é impresso em sequência.
+5. Ao final, a ferramenta retorna um **JSON resumindo a resposta final de cada subagente**, que o agente pai pode usar para compor a resposta definitiva.
+
+```json
+[
+  {
+    "role": "File Reader Specialist",
+    "prompt": "Leia o main.py e resuma o que ele faz",
+    "result": "O main.py apenas invoca run_cli()..."
+  },
+  {
+    "role": "Document Structuring Expert",
+    "prompt": "Proponha uma estrutura para o README",
+    "result": "Sugiro seções de visão geral, arquitetura..."
+  }
+]
+```
+
+> ⚠️ A ferramenta `spawn_subagents_parallel` é **excluída** do conjunto de ferramentas dos subagentes, impedindo recursão infinita.
 
 ## 💡 Exemplos de Uso
 
@@ -180,6 +225,11 @@ python main.py --prompt "Crie um novo arquivo 'test.py' com uma função simples
 ### Raciocínio Multi-passos
 ```bash
 python main.py --prompt "Leia o main.py e crie um documento de resumo em SUMMARY.md"
+```
+
+### Orquestração de Subagentes
+```bash
+python main.py --prompt "Divida a leitura dos arquivos agent.py, ai_provider.py e tools/multi_agent.py entre 3 subagentes especializados e traga um resumo unificado de cada um."
 ```
 
 ### Usando Modelos Locais (Ollama)
@@ -209,9 +259,9 @@ elif provider_name == "meu_custom":
 
 ```
 .
-├── .env                 # Variáveis de ambiente (chaves de API) — não versionado
+├── .env                 # Variáveis de ambiente (chaves de API) — NÃO versionado (ver .gitignore)
 ├── .env.example         # Modelo para o .env (exemplo com OpenRouter)
-├── .gitignore
+├── .gitignore           # Ignora build, .venv e .env
 ├── .python-version      # Versão do Python (3.14)
 ├── README.md            # Este arquivo
 ├── ai_provider.py       # Abstrações e implementações dos provedores de LLM
@@ -219,23 +269,44 @@ elif provider_name == "meu_custom":
 ├── cli.py               # CLI, parsing de argumentos e ConsoleAgentListener
 ├── main.py              # Ponto de entrada (chama run_cli)
 ├── pyproject.toml       # Configuração e dependências do projeto
-├── tools.py             # Ferramentas do agente (ops. de arquivo, cálculo)
+├── tools/               # Pacote de ferramentas do agente
+│   ├── __init__.py      # Expõe TOOLS_METADATA, TOOLS_MAP e set_active_provider
+│   ├── io_tools.py      # Operações de arquivo (list_project_files, read_file, write_file)
+│   ├── math_tools.py    # Cálculo matemático (calculate)
+│   └── multi_agent.py   # Orquestração de subagentes (spawn_subagents_parallel)
 └── uv.lock              # Dependências travadas (lock)
 ```
 
 ## 📦 Dependências
 
-- `anthropic>=0.116.0`
-- `google-genai>=2.10.0`
-- `openai>=2.44.0`
-- `pydantic>=2.13.4`
-- `python-dotenv>=1.2.2`
+O projeto (`pyproject.toml`) declara os seguintes metadados e dependências de runtime:
+
+| Metadado | Valor |
+|----------|-------|
+| **Nome** | `teste` *(placeholder)* |
+| **Versão** | `0.1.0` |
+| **Descrição** | `Add your description here` *(placeholder)* |
+| **Python** | `>=3.14` |
+| **Build system** | Não declarado (gerenciado via `uv`, ver `uv.lock`) |
+| **Scripts/entry-points** | Nenhum registrado em `pyproject.toml` |
+| **Dev/optional deps** | Nenhuma declarada |
+
+**Dependências de runtime** (todas com restrição de versão mínima `>=`, sem limite superior):
+
+- `anthropic>=0.116.0` — cliente da API da Anthropic (Claude)
+- `google-genai>=2.10.0` — cliente da API Google Gemini / GenAI
+- `openai>=2.44.0` — cliente da API OpenAI
+- `pydantic>=2.13.4` — validação de dados / modelos de configuração
+- `python-dotenv>=1.2.2` — carregamento de variáveis de ambiente do `.env`
+
+> 📌 Observação: não há seção `[build-system]`, `[project.optional-dependencies]` ou `[project.scripts]` no `pyproject.toml`. O projeto é gerenciado com **`uv`** (há um `uv.lock` na raiz). Para expor um comando de console, adicione um bloco `[project.scripts]` (ex.: `teste = "cli:main"`).
 
 ## 🔐 Notas de Segurança
 
 - As ferramentas `read_file` e `write_file` são restritas ao diretório do projeto (não conseguem acessar arquivos externos).
-- Chaves de API devem ser armazenadas em `.env` (nunca commitadas no git — veja `.gitignore`).
+- Chaves de API devem ser armazenadas em `.env`, que **já está listado no `.gitignore`** e nunca deve ser commitado. Se você já versionou um `.env`, gere novas chaves e remova o arquivo do histórico (`git rm --cached .env` + filtro de histórico).
 - A ferramenta `calculate` usa `eval()` com `__builtins__` desabilitado e uma lista restrita de caracteres — apenas números e operadores matemáticos básicos são permitidos.
+- A escrita de arquivos (`write_file`) é protegida por um *lock* de thread (`threading.Lock`), garantindo segurança em execuções paralelas de subagentes.
 
 ## 📝 Licença
 

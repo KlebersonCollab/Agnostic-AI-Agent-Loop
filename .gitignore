@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables / secrets (never commit API keys)
+.env
