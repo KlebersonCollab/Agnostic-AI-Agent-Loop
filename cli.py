@@ -211,17 +211,6 @@ def run_cli():
         except Exception as e:
             console.print(f"[red]Error loading checkpoint: {e}[/red]")
 
-    if not prompt:
-        try:
-            prompt = console.input("[bold cyan]Enter your prompt for the agent: [/bold cyan]")
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[bold red]Exiting.[/bold red]")
-            sys.exit(0)
-            
-    if not prompt.strip():
-        console.print("[bold red]Empty prompt. Exiting.[/bold red]")
-        sys.exit(0)
-
     # Initialize provider
     try:
         provider = get_provider(
@@ -237,12 +226,6 @@ def run_cli():
     # Set active provider for tools (subagents)
     set_active_provider(provider)
 
-    console.print()
-    console.print(Panel(
-        f"[bold cyan]Objective:[/bold cyan] {prompt if not checkpoint_loaded else 'Resume previous task from Handover Checkpoint'}", 
-        border_style="cyan"
-    ))
-
     # Setup listener and core Agent
     listener = ConsoleAgentListener()
     agent = Agent(
@@ -252,15 +235,87 @@ def run_cli():
         listener=listener,
         max_steps=args.max_steps
     )
-    
-    agent.run(prompt)
 
-    # Clean up checkpoint if completed successfully
-    if agent.exit_reason != "MAX_STEPS_REACHED":
-        if os.path.exists(checkpoint_file):
+    is_interactive = (args.prompt is None)
+
+    if not is_interactive:
+        # One-shot execution
+        console.print()
+        console.print(Panel(
+            f"[bold cyan]Objective:[/bold cyan] {prompt}", 
+            border_style="cyan"
+        ))
+        agent.run(prompt)
+        
+        # Clean up checkpoint if completed successfully
+        if agent.exit_reason != "MAX_STEPS_REACHED":
+            if os.path.exists(checkpoint_file):
+                try:
+                    os.remove(checkpoint_file)
+                    console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
+                except Exception:
+                    pass
+    else:
+        # Continuous interactive session
+        first_turn = True
+        while True:
+            # If a checkpoint was detected and approved at startup, execute it on the first turn
+            if first_turn and checkpoint_loaded:
+                console.print()
+                console.print(Panel(
+                    "[bold cyan]Resuming previous task from Handover Checkpoint[/bold cyan]", 
+                    border_style="cyan"
+                ))
+                agent.run(prompt)
+                first_turn = False
+                
+                # Clean up checkpoint if completed successfully
+                if agent.exit_reason != "MAX_STEPS_REACHED":
+                    if os.path.exists(checkpoint_file):
+                        try:
+                            os.remove(checkpoint_file)
+                            console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
+                        except Exception:
+                            pass
+                continue
+
             try:
-                os.remove(checkpoint_file)
-                console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
-            except Exception:
-                pass
+                console.print()
+                user_input = console.input("[bold magenta]Agy (or '/exit', '/clear') > [/bold magenta]").strip()
+            except (KeyboardInterrupt, EOFError):
+                console.print("\n[bold red]Exiting.[/bold red]")
+                break
 
+            if not user_input:
+                continue
+
+            if user_input.lower() in ("/exit", "/quit", "exit", "quit"):
+                console.print("[bold red]Exiting.[/bold red]")
+                break
+
+            if user_input.lower() in ("/clear", "/reset", "clear", "reset"):
+                from providers import ChatMessage, MessageRole
+                # Reset history to clean system prompt
+                agent.history = [
+                    ChatMessage(role=MessageRole.SYSTEM, content=agent.context_builder.build_prompt())
+                ]
+                console.print("[dim]✓ Conversation history and active context cleared.[/dim]")
+                continue
+
+            console.print()
+            console.print(Panel(
+                f"[bold cyan]Objective:[/bold cyan] {user_input}", 
+                border_style="cyan"
+            ))
+            agent.run(user_input)
+
+            # Clean up checkpoint if completed successfully
+            if agent.exit_reason != "MAX_STEPS_REACHED":
+                if os.path.exists(checkpoint_file):
+                    try:
+                        os.remove(checkpoint_file)
+                        console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
+                    except Exception:
+                        pass
+            
+            first_turn = False
