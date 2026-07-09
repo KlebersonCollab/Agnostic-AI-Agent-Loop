@@ -38,52 +38,75 @@ class MemoryManager:
     Manages and optimizes conversation history to prevent token overflow
     while preserving context and reasoning quality.
     """
-    def __init__(self, max_tool_output_chars: int = 4000, max_history_steps: int = 8):
+    def __init__(self, max_tool_output_chars: int = 4000, max_full_tool_outputs: int = 3):
         self.max_tool_output_chars = max_tool_output_chars
-        self.max_history_steps = max_history_steps
+        self.max_full_tool_outputs = max_full_tool_outputs
 
     def optimize_before_generation(self, messages: List[ChatMessage]) -> List[ChatMessage]:
         """
         Optimizes history before sending it to the LLM.
-        Applies sliding window to intermediate reasoning steps while preserving system and user prompts.
+        1. Collapses/archives the contents of older TOOL messages to save massive tokens
+           while keeping all ASSISTANT thoughts and tool call instructions intact.
+        2. Applies a large sliding window as a last-resort safety net for extremely long runs.
         """
         if len(messages) <= 4:
             return messages
 
-        # Preserve the very first system instructions and initial user query
-        preserved_header = []
-        conversation_start_idx = 0
+        # Find tool output messages that are older than self.max_full_tool_outputs
+        tool_output_count = 0
+        messages_to_archive_indices = set()
         
-        # Identify the initial setup messages (system and first user message)
-        for i, msg in enumerate(messages):
-            if msg.role in (MessageRole.SYSTEM, MessageRole.USER):
-                preserved_header.append(msg)
-                conversation_start_idx = i + 1
+        # Iterate backwards to count tool output messages starting from the most recent
+        for idx in range(len(messages) - 1, -1, -1):
+            msg = messages[idx]
+            if msg.role == MessageRole.TOOL:
+                tool_output_count += 1
+                if tool_output_count > self.max_full_tool_outputs:
+                    messages_to_archive_indices.add(idx)
+
+        # Build optimized message list
+        optimized = []
+        for idx, msg in enumerate(messages):
+            if idx in messages_to_archive_indices:
+                snippet = msg.content[:80].replace("\n", " ") if msg.content else ""
+                archived_content = (
+                    f"[Tool output for '{msg.name}' archived to save context tokens. "
+                    f"Original size: {len(msg.content or '')} chars. Content snippet: '{snippet}...']"
+                )
+                optimized.append(
+                    ChatMessage(
+                        role=msg.role,
+                        content=archived_content,
+                        tool_call_id=msg.tool_call_id,
+                        name=msg.name
+                    )
+                )
             else:
-                break
-                
-        # The remaining messages represent the reasoning steps (thoughts, tool calls, tool outputs)
-        reasoning_messages = messages[conversation_start_idx:]
-        
-        # We only keep the last N reasoning messages
-        # Note: A single ReAct step usually consists of:
-        # - assistant (thought + optional tool call)
-        # - tool (output)
-        # So we keep the last max_history_steps * 2 messages.
-        max_messages_to_keep = self.max_history_steps * 2
-        
-        if len(reasoning_messages) > max_messages_to_keep:
-            # Slice to keep only the recent ones
-            truncated_reasoning = reasoning_messages[-max_messages_to_keep:]
+                optimized.append(msg)
+
+        # Last resort safety net: sliding window if total messages exceed 40
+        max_total_messages = 40
+        if len(optimized) > max_total_messages:
+            preserved_header = []
+            conversation_start_idx = 0
+            for i, msg in enumerate(optimized):
+                if msg.role in (MessageRole.SYSTEM, MessageRole.USER):
+                    preserved_header.append(msg)
+                    conversation_start_idx = i + 1
+                else:
+                    break
             
-            # Insert a system message explaining that older steps were archived/truncated
-            archive_notice = ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=f"[System Note: Older reasoning steps and tool interactions have been archived to save context window. Only the last {self.max_history_steps} steps are shown below.]"
-            )
-            return preserved_header + [archive_notice] + truncated_reasoning
-            
-        return messages
+            reasoning_messages = optimized[conversation_start_idx:]
+            # Keep only the last 30 messages of reasoning
+            if len(reasoning_messages) > 30:
+                truncated_reasoning = reasoning_messages[-30:]
+                archive_notice = ChatMessage(
+                    role=MessageRole.SYSTEM,
+                    content="[System Note: Extremely old steps have been removed from context to fit the window limit.]"
+                )
+                return preserved_header + [archive_notice] + truncated_reasoning
+
+        return optimized
 
     def optimize_tool_output(self, name: str, result: str) -> str:
         """
@@ -110,7 +133,7 @@ class Agent:
         tools: List[ToolDefinition],
         tools_map: Dict[str, Any],
         listener: Optional[AgentListener] = None,
-        max_steps: int = 15,
+        max_steps: int = 25,
         memory_manager: Optional[MemoryManager] = None
     ):
         self.provider = provider

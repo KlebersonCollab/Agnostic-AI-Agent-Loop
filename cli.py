@@ -129,7 +129,7 @@ def run_cli():
     parser.add_argument(
         "--max-steps", 
         type=int, 
-        default=15,
+        default=75,
         help="Maximum loop iterations/steps"
     )
 

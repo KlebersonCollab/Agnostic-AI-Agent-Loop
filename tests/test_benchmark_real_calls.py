@@ -26,7 +26,7 @@ def test_real_call_single_agent_reasoning():
     )
     
     # We use a custom memory manager with tighter constraints to force truncation optimization
-    memory_manager = MemoryManager(max_tool_output_chars=1000, max_history_steps=5)
+    memory_manager = MemoryManager(max_tool_output_chars=1000, max_full_tool_outputs=2)
     
     agent = Agent(
         provider=provider,
