@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from ai_provider import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
+from providers import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
 
 SYSTEM_PROMPT = """You are a helpful autonomous agent.
 You solve tasks step-by-step.

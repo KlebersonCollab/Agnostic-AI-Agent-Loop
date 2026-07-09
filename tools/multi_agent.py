@@ -2,7 +2,7 @@ import json
 from typing import Dict, Any, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from ai_provider import BaseLLMProvider
+from providers import BaseLLMProvider
 from agent import Agent, AgentListener, SYSTEM_PROMPT
 from .io_tools import list_project_files, read_file, write_file
 from .math_tools import calculate

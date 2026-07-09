@@ -4,7 +4,7 @@ import json
 import argparse
 from typing import Dict, Any
 
-from ai_provider import get_provider
+from providers import get_provider
 from agent import Agent, AgentListener
 from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
 

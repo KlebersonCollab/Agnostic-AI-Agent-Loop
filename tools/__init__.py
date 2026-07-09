@@ -1,4 +1,4 @@
-from ai_provider import ToolDefinition
+from providers import ToolDefinition
 from . import io_tools
 from . import math_tools
 from . import multi_agent
