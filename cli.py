@@ -7,6 +7,7 @@ from typing import Dict, Any
 from providers import get_provider
 from agent import Agent, AgentListener
 from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
+from context_builder import ContextBuilder
 
 from rich.console import Console
 from rich.panel import Panel
@@ -135,18 +136,31 @@ def run_cli():
 
     args = parser.parse_args()
 
+    # Discover skills and rules at startup
+    builder = ContextBuilder(
+        base_system_prompt="",
+        skills_dir=".agents/skills",
+        rules_dir=".agents/rules"
+    )
+    skills_list = list(builder.skills_cache.keys())
+    rules_list = list(builder.rules_cache.keys())
+
     # Welcome Banner in Panel
     welcome_text = """
 [bold magenta]🤖 Welcome to the Agnostic AI Agent Loop![/bold magenta]
 
 [dim]Active Provider:[/dim] [bold blue]{provider}[/bold blue] | [dim]Model:[/dim] [bold green]{model}[/bold green]
 [dim]Tools available:[/dim] [yellow]{tools}[/yellow]
+[dim]Skills available:[/dim] [cyan]{skills}[/cyan]
+[dim]Rules active:[/dim] [magenta]{rules}[/magenta]
     """
     welcome_panel = Panel(
         Align.center(welcome_text.format(
             provider=args.provider,
             model=args.model,
-            tools=", ".join(TOOLS_MAP.keys())
+            tools=", ".join(TOOLS_MAP.keys()),
+            skills=", ".join(skills_list) if skills_list else "None",
+            rules=", ".join(rules_list) if rules_list else "None"
         )),
         border_style="magenta"
     )

@@ -171,6 +171,34 @@ TOOLS_METADATA = [
             },
             "required": ["filename"]
         }
+    ),
+    ToolDefinition(
+        name="load_skill",
+        description="Load the full detailed instructions and guidelines of a specialized skill into your system prompt context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the skill to load (e.g., 'debug', 'refactor')"
+                }
+            },
+            "required": ["name"]
+        }
+    ),
+    ToolDefinition(
+        name="unload_skill",
+        description="Unload a specialized skill from your system prompt context to free up context window space.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the skill to unload"
+                }
+            },
+            "required": ["name"]
+        }
     )
 ]
 

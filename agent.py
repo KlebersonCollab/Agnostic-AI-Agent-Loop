@@ -47,7 +47,8 @@ class Agent:
         tools_map: Dict[str, Any],
         listener: Optional[AgentListener] = None,
         max_steps: int = 15,
-        write_checkpoint_file: bool = True
+        write_checkpoint_file: bool = True,
+        system_prompt: str = SYSTEM_PROMPT
     ):
         self.provider = provider
         self.tools = tools
@@ -55,8 +56,16 @@ class Agent:
         self.listener = listener
         self.max_steps = max_steps
         self.write_checkpoint_file = write_checkpoint_file
+        
+        from context_builder import ContextBuilder
+        self.context_builder = ContextBuilder(
+            base_system_prompt=system_prompt,
+            skills_dir=".agents/skills",
+            rules_dir=".agents/rules"
+        )
+        
         self.history: List[ChatMessage] = [
-            ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT)
+            ChatMessage(role=MessageRole.SYSTEM, content=self.context_builder.build_prompt())
         ]
         self.exit_reason: Optional[str] = None
         self.handover_checkpoint: Optional[str] = None
@@ -69,6 +78,9 @@ class Agent:
         for step in range(1, self.max_steps + 1):
             if self.listener:
                 self.listener.on_step_start(step, self.max_steps)
+            
+            # Dynamically compile the system prompt
+            self.history[0].content = self.context_builder.build_prompt()
             
             is_emergency = (self.max_steps > 2) and (step == self.max_steps - 1)
             
@@ -143,7 +155,19 @@ class Agent:
                     if self.listener:
                         self.listener.on_tool_call(tool_name, tool_args, tool_id)
                     
-                    if tool_name in self.tools_map:
+                    if tool_name == "load_skill":
+                        name = tool_args.get("name")
+                        if self.context_builder.load_skill(name):
+                            result = f"Success: Skill '{name}' has been loaded into your system prompt."
+                        else:
+                            result = f"Error: Skill '{name}' not found."
+                    elif tool_name == "unload_skill":
+                        name = tool_args.get("name")
+                        if self.context_builder.unload_skill(name):
+                            result = f"Success: Skill '{name}' has been unloaded from your system prompt."
+                        else:
+                            result = f"Error: Skill '{name}' was not loaded."
+                    elif tool_name in self.tools_map:
                         try:
                             # Dynamically call the python function mapped to the tool name
                             result = self.tools_map[tool_name](**tool_args)

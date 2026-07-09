@@ -115,10 +115,9 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
             tools_map=subagent_tools_map,
             listener=sub_listener,
             max_steps=10,
-            write_checkpoint_file=False
+            write_checkpoint_file=False,
+            system_prompt=sub_system_prompt
         )
-        # Apply custom system instructions
-        agent.history[0].content = sub_system_prompt
         
         # Run agent loop
         agent.run(prompt)
