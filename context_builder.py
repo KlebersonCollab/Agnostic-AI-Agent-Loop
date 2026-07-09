@@ -49,6 +49,10 @@ class ContextBuilder:
         # filename -> content
         self.rules_cache: Dict[str, str] = {}
         
+        # AGENTS.md caching
+        self.agents_md_mtime: float = 0.0
+        self.agents_md_content: str = ""
+        
         # Active sets
         self.active_skills: Set[str] = set()
         self.active_rules: Set[str] = set()
@@ -164,6 +168,23 @@ class ContextBuilder:
     def build_prompt(self) -> str:
         """Compiles the dynamic system prompt with active rules, skills metadata, and active skills details."""
         prompt_parts = [self.base_system_prompt.strip()]
+
+        # Dynamic loading and caching of local AGENTS.md in the current working directory
+        agents_md_path = os.path.join(os.getcwd(), "AGENTS.md")
+        if os.path.exists(agents_md_path):
+            try:
+                mtime = os.path.getmtime(agents_md_path)
+                if mtime != self.agents_md_mtime:
+                    with open(agents_md_path, "r", encoding="utf-8") as f:
+                        self.agents_md_content = f.read().strip()
+                    self.agents_md_mtime = mtime
+                if self.agents_md_content:
+                    prompt_parts.append(f"\n## Project Context (AGENTS.md)\n{self.agents_md_content}")
+            except Exception:
+                pass
+        else:
+            self.agents_md_content = ""
+            self.agents_md_mtime = 0.0
         
         # Memory & Source of Truth Constraints
         prompt_parts.append(

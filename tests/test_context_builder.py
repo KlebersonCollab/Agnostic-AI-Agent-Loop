@@ -197,3 +197,34 @@ def test_agent_tool_interception():
     
     # Check that in step 3 (after unload_skill interception), the debug skill body WAS removed
     assert "This is the full detailed guideline for debugging code." not in provider.prompt_histories[2]
+
+
+def test_context_builder_agents_md(tmp_path, monkeypatch):
+    # Monkeypatch os.getcwd() to return tmp_path so it looks for AGENTS.md in tmp_path
+    monkeypatch.setattr(os, "getcwd", lambda: str(tmp_path))
+    
+    builder = ContextBuilder(base_system_prompt="Base prompt")
+    
+    # 1. No AGENTS.md exists yet
+    prompt = builder.build_prompt()
+    assert "## Project Context (AGENTS.md)" not in prompt
+    
+    # 2. Create AGENTS.md
+    agents_md = tmp_path / "AGENTS.md"
+    agents_md.write_text("Hello AGENTS instructions", encoding="utf-8")
+    
+    prompt = builder.build_prompt()
+    assert "## Project Context (AGENTS.md)" in prompt
+    assert "Hello AGENTS instructions" in prompt
+    
+    # 3. Update AGENTS.md content
+    # Sleep slightly or modify mtime explicitly to ensure the filesystem modification time changes
+    agents_md.write_text("Updated AGENTS instructions", encoding="utf-8")
+    prompt = builder.build_prompt()
+    assert "Updated AGENTS instructions" in prompt
+    
+    # 4. Delete AGENTS.md
+    os.remove(agents_md)
+    prompt = builder.build_prompt()
+    assert "## Project Context (AGENTS.md)" not in prompt
+
