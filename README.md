@@ -39,7 +39,7 @@ O projeto é organizado em módulos, cada um com uma responsabilidade bem defini
 │  │  │   Agent     │───▶│  Provider   │───▶│  Tools   │  │           │
 │  │  │   Loop      │    │  Factory    │    │(FS/Calc/ │  │           │
 │  │  └──────┬──────┘    └──────┬──────┘    │ Subagents)│  │           │
-│  │       AgentListener (ABC)  │          └──────────┘  │           │
+│  │       AgentListener (classe base)  │          └──────────┘  │           │
 │  └────────────┬───────────────┼──────────────────────────┘           │
 │               │                │                                      │
 │               ▼                ▼                                      │
@@ -57,7 +57,7 @@ O projeto é organizado em módulos, cada um com uma responsabilidade bem defini
 |---------|-----------|
 | `main.py` | Ponto de entrada; apenas invoca `run_cli()` de `cli.py` |
 | `cli.py` | Parsing de argumentos de linha de comando (via `argparse`), `ConsoleAgentListener` (saída colorida) e orquestração da sessão |
-| `agent.py` | Loop principal do agente (`Agent`), interface `AgentListener` e o `SYSTEM_PROMPT` |
+| `agent.py` | Loop principal do agente (`Agent`), classe base `AgentListener` (métodos no-op, não uma ABC) e o `SYSTEM_PROMPT` |
 | `context_builder.py` | Compilador dinâmico do *system prompt*: lê **regras** (`.agents/rules`) e **skills** (`.agents/skills`), permitindo carga/descarga em tempo de execução para otimizar a janela de contexto |
 | `providers/` | Pacote de abstração dos provedores de LLM: `base.py` (classe abstrata `BaseLLMProvider` + modelos Pydantic) e implementações (`openai.py`, `gemini.py`, `anthropic.py`); a factory `get_provider()` fica em `providers/__init__.py` |
 | `tools/` | Pacote de ferramentas do agente, dividido em módulos: `io_tools.py` (ops. de arquivo/código), `math_tools.py` (cálculo) e `multi_agent.py` (orquestração de subagentes). O `__init__.py` expõe `TOOLS_METADATA`, `TOOLS_MAP` e `set_active_provider` |
@@ -139,7 +139,7 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 ### Fluxo de Execução
 
 1. Faz o parsing dos argumentos via `argparse`.
-2. Se `--prompt` estiver vazio, imprime um banner de boas-vindas e lê o prompt interativamente do stdin (trata `Ctrl+C`/`EOF` com elegância, encerrando).
+2. Se `--prompt` estiver vazio, imprime um banner de boas-vindas e lê o prompt interativamente do terminal via `console.input()` do Rich (trata `Ctrl+C`/`EOF` com elegância, encerrando).
 3. Inicializa o provedor de IA via `get_provider(provider_name, model_name, api_key, base_url)`; em caso de falha, imprime erro e sai.
 4. Registra o provedor para as ferramentas via `set_active_provider(provider)` (definido em `tools/multi_agent.py` e reexportado por `tools/__init__.py`).
 5. Cria um `ConsoleAgentListener` (saída colorida no terminal) e um `Agent` com as ferramentas disponíveis e `max_steps`.
@@ -151,9 +151,9 @@ O agente possui um mecanismo de **checkpoint de handover** que evita a perda de 
 
 Como funciona (`agent.py` + `cli.py`):
 
-1. No **penúltimo passo** (`step == max_steps - 1`), o agente entra em **modo de emergência**: o sistema envia um aviso instruindo-o a **não chamar ferramentas** e a redigir um *handover checkpoint report* em Markdown (Progress Achieved, Blockers/Delays, Backlog, Next Step). Nesse passo, as ferramentas são desativadas (`tools=None`).
+1. No **penúltimo passo** (`step == max_steps - 1`, desde que `max_steps > 2`), o agente entra em **modo de emergência**: o sistema envia um aviso instruindo-o a **não chamar ferramentas** e a redigir um *handover checkpoint report* em Markdown (Progress Achieved, Blockers/Delays, Backlog, Next Step). Nesse passo, as ferramentas são desativadas (`tools=None`).
 2. O relatório é salvo em **`checkpoint.json`** (na raiz do projeto), junto com o `exit_reason` e o histórico completo da conversa (`history`), desde que `write_checkpoint_file=True` (padrão do `Agent`).
-3. Ao iniciar uma nova execução (`cli.py`), se existir um `checkpoint.json`, o programa o detecta e exibe o relatório, perguntando se você deseja **retomar a tarefa** (`y/n`, padrão `y`). Ao retomar, o agente recebe o relatório de handover como contexto e continua a partir dos próximos passos imediatos.
+3. Ao iniciar uma nova execução em **modo interativo** (ou seja, sem `--prompt`), se existir um `checkpoint.json`, o `cli.py` o detecta e exibe o relatório, perguntando se você deseja **retomar a tarefa** (`y/n`, padrão `y`). Ao retomar, o agente recebe o relatório de handover como contexto e continua a partir dos próximos passos imediatos. (Caso um `--prompt` seja informado, a detecção de checkpoint é ignorada e a tarefa recomeça do zero.)
 4. Se a tarefa for concluída com sucesso (`exit_reason != "MAX_STEPS_REACHED"`), o `cli.py` **remove automaticamente** o `checkpoint.json`. Se você recusar a retomada, o arquivo é renomeado para `checkpoint.json.old` para evitar conflito.
 
 > 🔒 O `checkpoint.json` contém o histórico completo da conversa e já está listado no `.gitignore` — nunca deve ser commitado.
@@ -188,7 +188,7 @@ O agente controla esse sistema através das ferramentas `load_skill` e `unload_s
 | `sdd-executor` | `.agents/skills/sdd-executor` | Implementação cirúrgica seguindo protocolos de qualidade |
 | `sdd-review` | `.agents/skills/sdd-review` | Valida implementação contra critérios de aceitação |
 
-> 📌 Cada skill pode conter uma pasta `references/` com documentos complementares (templates, guias) que são carregados junto com o corpo da skill.
+> 📌 Cada skill pode conter uma pasta `references/` com documentos complementares (templates, guias) que são carregados junto com o corpo da skill. **Observação:** no projeto atual, apenas as skills `sdd-*` (`sdd-planner`, `sdd-explorer`, `sdd-executor`, `sdd-review`) possuem pasta `references/`; as skills `debug`, `refactor` e `search` contêm apenas o `SKILL.md`.
 
 ## 🛠️ Provedores Suportados
 
@@ -209,7 +209,7 @@ A factory `get_provider()` (em `providers/__init__.py`) mapeia os nomes abaixo p
 
 ### Camada de Abstração (`providers/base.py`)
 
-Todos os provedores estendem a classe abstrata **`BaseLLMProvider`** e implementam o método `_generate(messages, tools, temperature, max_tokens)`. O método público `generate()` já provê *retry* com *backoff* exponencial (decorado com `@retry_with_backoff`) para falhas transitórias (rate limits, timeouts), relançando imediatamente erros permanentes (autenticação, chave inválida). Os modelos de dados compartilhados (Pydantic) são: `MessageRole`, `ToolCall`, `ChatMessage` e `ToolDefinition`.
+Todos os provedores estendem a classe abstrata **`BaseLLMProvider`** e implementam o método `_generate(messages, tools, temperature, max_tokens)`. O método público `generate()` já provê *retry* com *backoff* exponencial (decorado com `@retry_with_backoff`) para falhas transitórias (rate limits, timeouts), relançando imediatamente erros permanentes (autenticação, chave inválida). Os modelos de dados compartilhados são: `MessageRole` (um `Enum` do tipo `str`), `ToolCall`, `ChatMessage` e `ToolDefinition` (estes três últimos modelos Pydantic).
 
 **Particularidades por provedor:**
 
@@ -251,7 +251,7 @@ Como funciona internamente (`tools/multi_agent.py`):
 
 1. O agente pai chama `spawn_subagents_parallel` com uma lista de tarefas.
 2. Para cada tarefa, um `Agent` filho é criado reutilizando o **mesmo provedor ativo** (`set_active_provider`, definido em `tools/multi_agent.py` e chamado em `cli.py` antes de iniciar a sessão) e um `SYSTEM_PROMPT` estendido com a `role_description`.
-3. Cada subagente recebe um subconjunto fixo de ferramentas — `list_project_files`, `read_file`, `write_file` e `calculate` (a ferramenta `spawn_subagents_parallel` é **excluída** para evitar loops aninhados infinitos) — e executa seu próprio loop de raciocínio com `max_steps=10`.
+3. Cada subagente recebe o conjunto de ferramentas de `TOOLS_MAP` **exceto** `spawn_subagents_parallel` (que é **excluída** para evitar loops aninhados infinitos) — ou seja, `list_project_files`, `read_file`, `write_file`, `patch_file`, `search_grep`, `get_outline` e `calculate` — e executa seu próprio loop de raciocínio com `max_steps=10`.
 4. A execução é acompanhada **ao vivo** no terminal: o `CollectingAgentListener` imprime, em tempo real, cada passo de raciocínio, chamada de ferramenta e saída — usando uma **cor distinta por subagente** (ciano, magenta, amarelo, azul e verde, ciclando caso haja mais de 5 subagentes) e um prefixo `[Subagent: <role>]` que identifica o papel. Ao final, um bloco de resumo de cada subagente é impresso em sequência.
 5. Ao final, a ferramenta retorna um **JSON resumindo a resposta final de cada subagente**, que o agente pai pode usar para compor a resposta definitiva.
 
@@ -364,17 +364,18 @@ Corpo detalhado das diretrizes (carregado sob demanda via load_skill).
 ```
 .
 ├── .agents/              # Contexto dinâmico (skills e rules) — NÃO versionado o conteúdo sensível
-│   ├── mcp/             # Configurações de MCP (chrome-devtools, playwright)
+│   ├── mcp/             # Configurações de MCP (chrome-devtools, playwrite)
 │   ├── rules/           # Regras/restrições (ativadas por padrão): KNOWLEDGE, NO-SHORTCUTS,
 │   │                   #   QUALITY_ENFORCEMENT, RESEARCH_FIRST, TIER1_PROHIBITIONS, TOKEN_OPTIMIZATION
 │   └── skills/         # Skills especializadas (debug, refactor, search, sdd-planner,
-│                       #   sdd-explorer, sdd-executor, sdd-review) — cada uma com SKILL.md + references/
+│                       #   sdd-explorer, sdd-executor, sdd-review) — cada uma com SKILL.md
+│                       #   (apenas as skills sdd-* possuem pasta references/ com documentos complementares)
 ├── .env                 # Variáveis de ambiente (chaves de API) — NÃO versionado (ver .gitignore)
 ├── .env.example         # Modelo para o .env (exemplo com OpenRouter)
 ├── .gitignore           # Ignora build, .venv e .env
 ├── .python-version      # Versão do Python (3.14)
 ├── README.md            # Este arquivo
-├── agent.py             # Loop principal do agente e interface AgentListener
+├── agent.py             # Loop principal do agente e classe base AgentListener (métodos no-op)
 ├── cli.py               # CLI, parsing de argumentos e ConsoleAgentListener
 ├── main.py              # Ponto de entrada (chama run_cli)
 ├── context_builder.py   # Compilador dinâmico do system prompt (skills + rules)
