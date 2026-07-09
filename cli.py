@@ -138,9 +138,7 @@ def run_cli():
 
     # Discover skills and rules at startup
     builder = ContextBuilder(
-        base_system_prompt="",
-        skills_dir=".agents/skills",
-        rules_dir=".agents/rules"
+        base_system_prompt=""
     )
     skills_list = list(builder.skills_cache.keys())
     rules_list = list(builder.rules_cache.keys())

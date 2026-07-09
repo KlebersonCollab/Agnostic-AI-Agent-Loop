@@ -176,8 +176,8 @@ def test_agent_tool_interception():
     )
     
     # Override skills/rules dirs to use the test ones
-    agent.context_builder.skills_dir = TEST_SKILLS_DIR
-    agent.context_builder.rules_dir = TEST_RULES_DIR
+    agent.context_builder.skills_dirs = [TEST_SKILLS_DIR]
+    agent.context_builder.rules_dirs = [TEST_RULES_DIR]
     agent.context_builder.skills_cache.clear()
     agent.context_builder.rules_cache.clear()
     agent.context_builder.active_rules.clear()

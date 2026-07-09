@@ -59,9 +59,7 @@ class Agent:
         
         from context_builder import ContextBuilder
         self.context_builder = ContextBuilder(
-            base_system_prompt=system_prompt,
-            skills_dir=".agents/skills",
-            rules_dir=".agents/rules"
+            base_system_prompt=system_prompt
         )
         
         self.history: List[ChatMessage] = [
