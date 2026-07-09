@@ -53,6 +53,10 @@ class ContextBuilder:
         self.agents_md_mtime: float = 0.0
         self.agents_md_content: str = ""
         
+        # DESIGN.md caching
+        self.design_md_mtime: float = 0.0
+        self.design_md_content: str = ""
+        
         # Active sets
         self.active_skills: Set[str] = set()
         self.active_rules: Set[str] = set()
@@ -165,7 +169,7 @@ class ContextBuilder:
             return True
         return False
 
-    def build_prompt(self) -> str:
+    def build_prompt(self, history: List[Any] = None) -> str:
         """Compiles the dynamic system prompt with active rules, skills metadata, and active skills details."""
         prompt_parts = [self.base_system_prompt.strip()]
 
@@ -185,6 +189,46 @@ class ContextBuilder:
         else:
             self.agents_md_content = ""
             self.agents_md_mtime = 0.0
+
+        # Dynamic loading and caching of local DESIGN.md in the current working directory (only when design/frontend is relevant)
+        design_md_path = os.path.join(os.getcwd(), "DESIGN.md")
+        if os.path.exists(design_md_path):
+            is_design_needed = False
+            if history:
+                design_keywords = {
+                    "design", "frontend", "ui", "ux", "css", "html", "style", "layout", 
+                    "component", "color", "tailwind", "react", "vue", "aesthetic", 
+                    "visual", "interface", "mockup", "glassmorphism", "animation",
+                    "web app", "website", "button", "pixel", "typography", "responsive",
+                    "frontend", "figma", "sass", "less", "bootstrap"
+                }
+                for msg in history:
+                    # Check both message content and any tool call names/arguments
+                    text_to_check = ""
+                    if getattr(msg, "content", None):
+                        text_to_check += msg.content.lower()
+                    if getattr(msg, "tool_calls", None):
+                        for tc in msg.tool_calls:
+                            text_to_check += f" {tc.name.lower()} {str(tc.arguments).lower()}"
+                    
+                    if any(kw in text_to_check for kw in design_keywords):
+                        is_design_needed = True
+                        break
+            
+            if is_design_needed:
+                try:
+                    mtime = os.path.getmtime(design_md_path)
+                    if mtime != self.design_md_mtime:
+                        with open(design_md_path, "r", encoding="utf-8") as f:
+                            self.design_md_content = f.read().strip()
+                        self.design_md_mtime = mtime
+                    if self.design_md_content:
+                        prompt_parts.append(f"\n## Design & Frontend Guidelines (DESIGN.md)\n{self.design_md_content}")
+                except Exception:
+                    pass
+        else:
+            self.design_md_content = ""
+            self.design_md_mtime = 0.0
         
         # Memory & Source of Truth Constraints
         prompt_parts.append(

@@ -228,3 +228,44 @@ def test_context_builder_agents_md(tmp_path, monkeypatch):
     prompt = builder.build_prompt()
     assert "## Project Context (AGENTS.md)" not in prompt
 
+
+def test_context_builder_design_md(tmp_path, monkeypatch):
+    # Monkeypatch os.getcwd() to return tmp_path so it looks for DESIGN.md in tmp_path
+    monkeypatch.setattr(os, "getcwd", lambda: str(tmp_path))
+    
+    builder = ContextBuilder(base_system_prompt="Base prompt")
+    
+    # Create DESIGN.md
+    design_md = tmp_path / "DESIGN.md"
+    design_md.write_text("Sleek design guidelines", encoding="utf-8")
+    
+    # 1. No history provided, design should NOT be loaded
+    prompt = builder.build_prompt()
+    assert "## Design & Frontend Guidelines (DESIGN.md)" not in prompt
+    
+    # 2. History provided but no design keywords, design should NOT be loaded
+    history_no_design = [
+        ChatMessage(role=MessageRole.USER, content="Please list the project files")
+    ]
+    prompt = builder.build_prompt(history_no_design)
+    assert "## Design & Frontend Guidelines (DESIGN.md)" not in prompt
+    
+    # 3. History provided with design keywords, design SHOULD be loaded
+    history_with_design = [
+        ChatMessage(role=MessageRole.USER, content="Please create a beautiful button styling using tailwind css")
+    ]
+    prompt = builder.build_prompt(history_with_design)
+    assert "## Design & Frontend Guidelines (DESIGN.md)" in prompt
+    assert "Sleek design guidelines" in prompt
+    
+    # 4. Update DESIGN.md content
+    design_md.write_text("Updated glassmorphism design guidelines", encoding="utf-8")
+    prompt = builder.build_prompt(history_with_design)
+    assert "Updated glassmorphism design guidelines" in prompt
+    
+    # 5. Delete DESIGN.md
+    os.remove(design_md)
+    prompt = builder.build_prompt(history_with_design)
+    assert "## Design & Frontend Guidelines (DESIGN.md)" not in prompt
+
+
