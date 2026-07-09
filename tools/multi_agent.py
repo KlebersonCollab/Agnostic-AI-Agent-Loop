@@ -7,6 +7,14 @@ from agent import Agent, AgentListener, SYSTEM_PROMPT
 from .io_tools import list_project_files, read_file, write_file
 from .math_tools import calculate
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.rule import Rule
+from rich.markup import escape
+
+console = Console()
+
 # Global reference to the active AI Provider
 _active_provider = None
 
@@ -19,18 +27,17 @@ def set_active_provider(provider: BaseLLMProvider):
 class CollectingAgentListener(AgentListener):
     """
     Agent listener that collects logs of a subagent's execution AND prints them
-    to the terminal in real-time with specific color coding, allowing live feedback.
+    to the terminal in real-time with Rich color coding and streaming feedback.
     """
     def __init__(self, role: str, color_code: str):
         self.role = role
         self.color = color_code
-        self.end_color = '\033[0m'
         self.logs = []
 
     def log_and_print(self, msg: str):
         self.logs.append(msg)
-        # Thread-safe print with specific color and role prefix
-        print(f"{self.color}[Subagent: {self.role}] {msg}{self.end_color}")
+        # Thread-safe Rich printing using markup styles, escaping content to prevent markup errors
+        console.print(f"[{self.color}][Subagent: {self.role}] {escape(msg)}[/]")
 
     def on_step_start(self, step: int, max_steps: int):
         self.log_and_print(f"--- Step {step} / {max_steps} ---")
@@ -76,26 +83,29 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
     from tools import TOOLS_METADATA
     subagent_tools_metadata = [t for t in TOOLS_METADATA if t.name != "spawn_subagents_parallel"]
 
-    # Formatting colors for console output
-    header_color = '\033[95m'
-    cyan_color = '\033[96m'
-    end_color = '\033[0m'
-
-    # Color pool for distinct subagents
+    # Rich styles for distinct subagents
     subagent_colors = [
-        '\033[96m',  # Cyan
-        '\033[95m',  # Magenta
-        '\033[93m',  # Yellow
-        '\033[94m',  # Blue
-        '\033[92m',  # Green
+        'cyan',
+        'magenta',
+        'yellow',
+        'blue',
+        'green',
     ]
 
-    print(f"\n{header_color}👥 [Multi-Agent Orchestrator] Spawning {len(tasks)} subagents in parallel...{end_color}")
+    console.print()
+    console.print(Panel(
+        f"[bold magenta]👥 [Multi-Agent Orchestrator][/bold magenta] Spawning [bold cyan]{len(tasks)}[/bold cyan] subagents in parallel...",
+        border_style="magenta",
+        expand=False
+    ))
     for idx, task in enumerate(tasks, 1):
         role = task.get("role_description", "General Specialist")
         prompt = task.get("prompt", "")
-        print(f"   {cyan_color}➔ Subagent #{idx} | Role: '{role}' | Prompt: '{prompt}'{end_color}")
-    print(f"{header_color}================ LIVE SUBAGENT STREAM ================{end_color}\n")
+        console.print(f"   [bold cyan]➔ Subagent #{idx}[/bold cyan] | [dim]Role:[/dim] '{role}' | [dim]Prompt:[/dim] '{prompt}'")
+    
+    console.print()
+    console.print(Rule("[bold magenta]LIVE SUBAGENT STREAM[/bold magenta]", style="magenta"))
+    console.print()
 
     def run_single_subagent(task_info: Dict[str, str], index: int):
         role = task_info.get("role_description", "General Specialist")
@@ -160,14 +170,20 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
                     "final_answer": f"Error: Thread crashed: {e}"
                 }
 
-    print(f"\n{header_color}================ LIVE STREAM COMPLETED ================{end_color}")
+    console.print()
+    console.print(Rule("[bold magenta]LIVE STREAM COMPLETED[/bold magenta]", style="magenta"))
+    console.print()
 
-    # Print final summary of each subagent
+    # Print final summary of each subagent inside beautiful Panels
     for res in task_results:
-        print(f"\n{header_color}➔ SUBAGENT SUMMARY: {res['role']}{end_color}")
-        print(f"  {cyan_color}Final Answer Summary:{end_color} {res['final_answer']}")
-        print(f"{header_color}------------------------------------------------------{end_color}")
-    print()
+        summary_panel = Panel(
+            Markdown(res["final_answer"]),
+            title=f"👥 [bold]Subagent Summary: {res['role']}[/bold]",
+            border_style="magenta",
+            expand=False
+        )
+        console.print(summary_panel)
+        console.print()
 
     # Construct the JSON report for the parent agent
     report = []

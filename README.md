@@ -130,9 +130,9 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 | `--api-key` | `str` | *(nenhum)* | — | Chave de API do provedor (opcional; recorre às variáveis de ambiente) |
 | `--base-url` | `str` | *(nenhum)* | — | URL base customizada para endpoints compatíveis com OpenAI (Ollama, Groq, locais) |
 | `--prompt` | `str` | *(nenhum)* | — | Tarefa para o agente. Se omitido, inicia o modo interativo |
-| `--max-steps` | `int` | `25` | — | Número máximo de iterações/passos do loop do agente |
+| `--max-steps` | `int` | `15` | — | Número máximo de iterações/passos do loop do agente |
 
-> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps`.
+> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps` (padrão `15` na CLI; o construtor de `Agent` usa `25` caso nenhum valor seja passado).
 
 ### Fluxo de Execução
 
@@ -188,7 +188,7 @@ Esta ferramenta permite que o agente principal divida uma tarefa grande em parte
 Como funciona internamente (`tools/multi_agent.py`):
 
 1. O agente pai chama `spawn_subagents_parallel` com uma lista de tarefas.
-2. Para cada tarefa, um `Agent` filho é criado reutilizando o **mesmo provedor ativo** (`set_active_provider`, definido em `cli.py` antes de iniciar a sessão) e um `SYSTEM_PROMPT` estendido com a `role_description`.
+2. Para cada tarefa, um `Agent` filho é criado reutilizando o **mesmo provedor ativo** (`set_active_provider`, definido em `tools/multi_agent.py` e chamado em `cli.py` antes de iniciar a sessão) e um `SYSTEM_PROMPT` estendido com a `role_description`.
 3. Cada subagente recebe um subconjunto de ferramentas (todas, exceto `spawn_subagents_parallel`, evitando loops aninhados infinitos) e executa seu próprio loop de raciocínio com `max_steps=10`.
 4. A execução é acompanhada **ao vivo** no terminal: o `CollectingAgentListener` imprime, em tempo real, cada passo de raciocínio, chamada de ferramenta e saída — usando uma **cor distinta por subagente** (ciano, magenta, amarelo, azul, verde, em ciclo) e um prefixo `[Subagent: <role>]` que identifica o papel. Ao final, um bloco de resumo de cada subagente é impresso em sequência.
 5. Ao final, a ferramenta retorna um **JSON resumindo a resposta final de cada subagente**, que o agente pai pode usar para compor a resposta definitiva.
@@ -298,6 +298,7 @@ O projeto (`pyproject.toml`) declara os seguintes metadados e dependências de r
 - `openai>=2.44.0` — cliente da API OpenAI
 - `pydantic>=2.13.4` — validação de dados / modelos de configuração
 - `python-dotenv>=1.2.2` — carregamento de variáveis de ambiente do `.env`
+- `rich>=15.0.0` — formatação/UI de terminal (painéis, markdown, syntax highlighting) usada pela CLI e pelos subagentes
 
 > 📌 Observação: não há seção `[build-system]`, `[project.optional-dependencies]` ou `[project.scripts]` no `pyproject.toml`. O projeto é gerenciado com **`uv`** (há um `uv.lock` na raiz). Para expor um comando de console, adicione um bloco `[project.scripts]` (ex.: `teste = "cli:main"`).
 

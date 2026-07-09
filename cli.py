@@ -8,45 +8,90 @@ from ai_provider import get_provider
 from agent import Agent, AgentListener
 from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
 
-# --- ANSI escape codes for terminal coloring ---
-class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-    END = '\033[0m'
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.rule import Rule
+from rich.align import Align
+from rich.text import Text
+from rich.markup import escape
 
-def print_color(text: str, color: str):
-    print(f"{color}{text}{Colors.END}")
-
+console = Console()
 
 class ConsoleAgentListener(AgentListener):
     """
-    Console/Terminal implementation of the AgentListener.
-    Handles user interaction output with colors.
+    Console/Terminal implementation of the AgentListener using Rich.
+    Provides a beautiful, structured CLI dashboard with live status indicators.
     """
+    def __init__(self):
+        self.status = None
+
+    def _stop_status(self):
+        if self.status:
+            self.status.stop()
+            self.status = None
+
     def on_step_start(self, step: int, max_steps: int):
-        print_color(f"--- Step {step} / {max_steps} ---", Colors.HEADER)
+        self._stop_status()
+        console.print()
+        console.rule(f"[bold magenta]Step {step} / {max_steps}[/bold magenta]", style="magenta")
+        # Start a beautiful loading spinner to show the LLM is thinking
+        self.status = console.status("[bold green]Agent is thinking (querying LLM)...", spinner="dots")
+        self.status.start()
 
     def on_thought(self, thought: str):
-        print_color(f"🤖 Thought: {thought}", Colors.GREEN)
+        self._stop_status()
+        # Render the thought block as Markdown in a green panel
+        panel = Panel(
+            Markdown(thought),
+            title="🤖 [bold green]Agent Thought[/bold green]",
+            border_style="green",
+            expand=False
+        )
+        console.print(panel)
 
     def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
-        print_color(f"🛠️ Tool Call: {name}({json.dumps(arguments)})", Colors.YELLOW)
+        self._stop_status()
+        # Pretty print arguments in JavaScript style for cleaner visualization
+        args_json = json.dumps(arguments, indent=2, ensure_ascii=False)
+        syntax = Syntax(f"{name}(\n{args_json}\n)", "javascript", theme="monokai", background_color="default")
+        panel = Panel(
+            syntax,
+            title="🛠️ [bold yellow]Tool Call[/bold yellow]",
+            border_style="yellow",
+            expand=False
+        )
+        console.print(panel)
 
     def on_tool_output(self, name: str, result: str):
-        print_color(f"📥 Tool Output: {result}", Colors.CYAN)
-        print()
+        self._stop_status()
+        
+        # Check if the output is JSON
+        try:
+            parsed = json.loads(result)
+            display_content = Syntax(json.dumps(parsed, indent=2, ensure_ascii=False), "json", theme="monokai", background_color="default")
+        except Exception:
+            # Wrap in Text to prevent Rich from parsing raw strings as markup
+            display_content = Text(result)
+
+        panel = Panel(
+            display_content,
+            title="📥 [bold cyan]Tool Output[/bold cyan]",
+            border_style="cyan",
+            expand=False
+        )
+        console.print(panel)
 
     def on_error(self, message: str):
-        print_color(f"❌ {message}", Colors.RED)
+        self._stop_status()
+        console.print(Panel(Text(message), title="❌ Error", border_style="red"))
 
     def on_complete(self):
-        print_color("\n🏁 Task Completed!", Colors.HEADER + Colors.BOLD)
+        self._stop_status()
+        console.print()
+        console.print(Align.center("[bold green]🏁 Task Completed Successfully![/bold green]"))
+        console.print()
 
 
 def run_cli():
@@ -90,20 +135,33 @@ def run_cli():
 
     args = parser.parse_args()
 
-    # Ask interactively if no prompt is provided
+    # Welcome Banner in Panel
+    welcome_text = """
+[bold magenta]🤖 Welcome to the Agnostic AI Agent Loop![/bold magenta]
+
+[dim]Active Provider:[/dim] [bold blue]{provider}[/bold blue] | [dim]Model:[/dim] [bold green]{model}[/bold green]
+[dim]Tools available:[/dim] [yellow]{tools}[/yellow]
+    """
+    welcome_panel = Panel(
+        Align.center(welcome_text.format(
+            provider=args.provider,
+            model=args.model,
+            tools=", ".join(TOOLS_MAP.keys())
+        )),
+        border_style="magenta"
+    )
+    console.print(welcome_panel)
+
     prompt = args.prompt
     if not prompt:
-        print_color("🤖 Welcome to the Agnostic AI Agent Loop!", Colors.HEADER + Colors.BOLD)
-        print(f"Active Provider: {args.provider} | Model: {args.model}")
-        print(f"Tools available: {', '.join(TOOLS_MAP.keys())}\n")
         try:
-            prompt = input("Enter your prompt for the agent: ")
+            prompt = console.input("[bold cyan]Enter your prompt for the agent: [/bold cyan]")
         except (KeyboardInterrupt, EOFError):
-            print("\nExiting.")
+            console.print("\n[bold red]Exiting.[/bold red]")
             sys.exit(0)
             
     if not prompt.strip():
-        print("Empty prompt. Exiting.")
+        console.print("[bold red]Empty prompt. Exiting.[/bold red]")
         sys.exit(0)
 
     # Initialize provider
@@ -115,14 +173,14 @@ def run_cli():
             base_url=args.base_url
         )
     except Exception as e:
-        print_color(f"Initialization Error: {e}", Colors.RED)
+        console.print(Panel(f"Initialization Error: {e}", title="❌ Error", border_style="red"))
         sys.exit(1)
 
     # Set active provider for tools (subagents)
     set_active_provider(provider)
 
-    print_color(f"\n🚀 Starting Agent Session...", Colors.HEADER + Colors.BOLD)
-    print_color(f"Objective: {prompt}\n", Colors.CYAN)
+    console.print()
+    console.print(Panel(f"[bold cyan]Objective:[/bold cyan] {prompt}", border_style="cyan"))
 
     # Setup listener and core Agent
     listener = ConsoleAgentListener()
