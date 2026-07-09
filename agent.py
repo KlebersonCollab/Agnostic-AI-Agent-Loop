@@ -43,7 +43,7 @@ class Agent:
         tools: List[ToolDefinition],
         tools_map: Dict[str, Any],
         listener: Optional[AgentListener] = None,
-        max_steps: int = 25
+        max_steps: int = 15
     ):
         self.provider = provider
         self.tools = tools
