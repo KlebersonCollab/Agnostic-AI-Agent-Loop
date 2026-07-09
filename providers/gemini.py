@@ -14,7 +14,7 @@ class GeminiProvider(BaseLLMProvider):
             api_key=self.api_key or os.environ.get("GEMINI_API_KEY")
         )
 
-    def generate(
+    def _generate(
         self,
         messages: List[ChatMessage],
         tools: Optional[List[ToolDefinition]] = None,

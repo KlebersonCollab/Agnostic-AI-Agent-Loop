@@ -15,7 +15,7 @@ class OpenAIProvider(BaseLLMProvider):
             base_url=base_url or os.environ.get("OPENAI_BASE_URL")
         )
 
-    def generate(
+    def _generate(
         self,
         messages: List[ChatMessage],
         tools: Optional[List[ToolDefinition]] = None,

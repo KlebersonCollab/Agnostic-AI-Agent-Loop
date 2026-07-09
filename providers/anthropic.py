@@ -12,7 +12,7 @@ class AnthropicProvider(BaseLLMProvider):
             api_key=self.api_key or os.environ.get("ANTHROPIC_API_KEY")
         )
 
-    def generate(
+    def _generate(
         self,
         messages: List[ChatMessage],
         tools: Optional[List[ToolDefinition]] = None,
