@@ -56,11 +56,9 @@ O projeto é organizado em módulos, cada um com uma responsabilidade bem defini
 | `main.py` | Ponto de entrada; apenas invoca `run_cli()` de `cli.py` |
 | `cli.py` | Parsing de argumentos de linha de comando (via `argparse`), `ConsoleAgentListener` (saída colorida) e orquestração da sessão |
 | `agent.py` | Loop principal do agente (`Agent`), interface `AgentListener` e o `SYSTEM_PROMPT` |
-| `ai_provider.py` | Classe base abstrata `BaseLLMProvider` + implementações para os provedores de LLM e a factory `get_provider()` |
+| `providers/` | Pacote de abstração dos provedores de LLM: `base.py` (classe abstrata `BaseLLMProvider` + modelos Pydantic) e implementações (`openai.py`, `gemini.py`, `anthropic.py`); a factory `get_provider()` fica em `providers/__init__.py` |
 | `tools/` | Pacote de ferramentas do agente, dividido em módulos: `io_tools.py` (ops. de arquivo), `math_tools.py` (cálculo) e `multi_agent.py` (orquestração de subagentes). O `__init__.py` expõe `TOOLS_METADATA`, `TOOLS_MAP` e `set_active_provider` |
 | `pyproject.toml` | Metadados do projeto e dependências |
-
-> 📝 **Observação:** O `pyproject.toml` ainda usa valores *placeholder* (`name = "teste"`, `description = "Add your description here"`). Lembre-se de ajustá-los antes de publicar/distribuir o pacote.
 
 ## 🚀 Início Rápido
 
@@ -130,9 +128,9 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 | `--api-key` | `str` | *(nenhum)* | — | Chave de API do provedor (opcional; recorre às variáveis de ambiente) |
 | `--base-url` | `str` | *(nenhum)* | — | URL base customizada para endpoints compatíveis com OpenAI (Ollama, Groq, locais) |
 | `--prompt` | `str` | *(nenhum)* | — | Tarefa para o agente. Se omitido, inicia o modo interativo |
-| `--max-steps` | `int` | `15` | — | Número máximo de iterações/passos do loop do agente |
+| `--max-steps` | `int` | `75` | — | Número máximo de iterações/passos do loop do agente |
 
-> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps` (padrão `15` na CLI; o construtor de `Agent` usa `25` caso nenhum valor seja passado).
+> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps` (padrão `75` na CLI; o construtor de `Agent` usa `15` caso nenhum valor seja passado).
 
 ### Fluxo de Execução
 
@@ -145,7 +143,7 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 
 ## 🛠️ Provedores Suportados
 
-A factory `get_provider()` mapeia os nomes abaixo para as respectivas implementações em `ai_provider.py`:
+A factory `get_provider()` (em `providers/__init__.py`) mapeia os nomes abaixo para as respectivas implementações no pacote `providers/`:
 
 | Nome (`--provider`) | Implementação | Observações |
 |---------------------|---------------|-------------|
@@ -167,7 +165,7 @@ O agente tem acesso a estas ferramentas (definidas no pacote `tools/` e expostas
 | Ferramenta | Descrição | Parâmetros |
 |------------|-----------|------------|
 | `list_project_files` | Lista arquivos/diretórios recursivamente (ignora `.git`, `.venv`, `__pycache__`, `.pytest_cache`, `.idea`, `.vscode`) | `path` (opcional, padrão: ".") |
-| `read_file` | Lê o conteúdo de um arquivo (restrito ao diretório do projeto) | `filename` (obrigatório) |
+| `read_file` | Lê o conteúdo de um arquivo (restrito ao diretório do projeto); suporta leitura de um intervalo de linhas via `start_line`/`end_line` (1-indexed, inclusivo) | `filename` (obrigatório), `start_line` (opcional), `end_line` (opcional) |
 | `write_file` | Cria/sobrescreve um arquivo com conteúdo (restrito ao diretório do projeto; cria diretórios pais; *thread-safe*) | `filename`, `content` (ambos obrigatórios) |
 | `calculate` | Avalia expressões matemáticas (apenas números e operadores básicos) | `expression` (obrigatório) |
 | `spawn_subagents_parallel` | **Orquestração multi-agente**: dispara vários subagentes especializados em paralelo para executar tarefas concorrentemente | `tasks` (obrigatório): lista de `{"role_description", "prompt"}` |
@@ -176,7 +174,7 @@ O agente tem acesso a estas ferramentas (definidas no pacote `tools/` e expostas
 
 Não há decorators neste código. As ferramentas são expostas ao agente através de **duas estruturas de nível de módulo** (definidas em `tools/__init__.py`) que devem permanecer sincronizadas:
 
-1. **`TOOLS_METADATA`** — uma `List[ToolDefinition]` (modelos Pydantic de `ai_provider.py`). É o *schema* enviado ao LLM para que ele conheça o `name`, `description` e o JSON-Schema `parameters` de cada ferramenta.
+1. **`TOOLS_METADATA`** — uma `List[ToolDefinition]` (modelos Pydantic de `providers/`). É o *schema* enviado ao LLM para que ele conheça o `name`, `description` e o JSON-Schema `parameters` de cada ferramenta.
 2. **`TOOLS_MAP`** — um `Dict[str, Callable]` mapeando cada `name` → sua função Python real. O loop do `Agent` procura `tool_name` em `tools_map` e chama `tools_map[tool_name](**tool_args)` dinamicamente.
 
 Se um nome de ferramenta aparece nos metadados mas não no mapa, o agente retorna `"Tool '...' is not registered/available."`.
@@ -229,7 +227,7 @@ python main.py --prompt "Leia o main.py e crie um documento de resumo em SUMMARY
 
 ### Orquestração de Subagentes
 ```bash
-python main.py --prompt "Divida a leitura dos arquivos agent.py, ai_provider.py e tools/multi_agent.py entre 3 subagentes especializados e traga um resumo unificado de cada um."
+python main.py --prompt "Divida a leitura dos arquivos agent.py, providers/__init__.py e tools/multi_agent.py entre 3 subagentes especializados e traga um resumo unificado de cada um."
 ```
 
 ### Usando Modelos Locais (Ollama)
@@ -240,17 +238,20 @@ python main.py --provider ollama --model llama3.2 --prompt "Escreva um script Py
 
 ## 🔧 Adicionando Novos Provedores
 
-1. Crie uma nova classe em `ai_provider.py` estendendo `BaseLLMProvider`.
-2. Implemente o método `generate()` (recebe `messages`, `tools`, `temperature`, `max_tokens` e retorna um `ChatMessage`).
-3. Adicione o provedor à factory `get_provider()`.
+1. Crie uma nova classe no pacote `providers/` estendendo `BaseLLMProvider` (definida em `providers/base.py`).
+2. Implemente o método `_generate()` (recebe `messages`, `tools`, `temperature`, `max_tokens` e retorna um `ChatMessage`). O método público `generate()` já provê *retry* com *backoff*.
+3. Adicione o provedor à factory `get_provider()` em `providers/__init__.py`.
 
 ```python
+# Em providers/meu_provedor.py
+from providers.base import BaseLLMProvider, ChatMessage
+
 class MeuProvedorCustom(BaseLLMProvider):
-    def generate(self, messages, tools=None, temperature=0.7, max_tokens=None):
+    def _generate(self, messages, tools=None, temperature=0.7, max_tokens=None):
         # Sua implementação aqui
         pass
 
-# Em get_provider():
+# Em providers/__init__.py -> get_provider():
 elif provider_name == "meu_custom":
     return MeuProvedorCustom(model_name=model_name, api_key=api_key, **kwargs)
 ```
@@ -264,16 +265,22 @@ elif provider_name == "meu_custom":
 ├── .gitignore           # Ignora build, .venv e .env
 ├── .python-version      # Versão do Python (3.14)
 ├── README.md            # Este arquivo
-├── ai_provider.py       # Abstrações e implementações dos provedores de LLM
 ├── agent.py             # Loop principal do agente e interface AgentListener
 ├── cli.py               # CLI, parsing de argumentos e ConsoleAgentListener
 ├── main.py              # Ponto de entrada (chama run_cli)
 ├── pyproject.toml       # Configuração e dependências do projeto
+├── providers/           # Pacote de abstração dos provedores de LLM
+│   ├── __init__.py      # Expõe BaseLLMProvider, ChatMessage, MessageRole, ToolDefinition e a factory get_provider()
+│   ├── base.py          # BaseLLMProvider (ABC), ChatMessage, MessageRole, ToolCall, ToolDefinition e retry_with_backoff
+│   ├── openai.py        # OpenAIProvider, OpenAICompatibleProvider (Ollama/Groq/DeepSeek) e OpenRouterProvider
+│   ├── gemini.py        # GeminiProvider
+│   └── anthropic.py     # AnthropicProvider
 ├── tools/               # Pacote de ferramentas do agente
 │   ├── __init__.py      # Expõe TOOLS_METADATA, TOOLS_MAP e set_active_provider
 │   ├── io_tools.py      # Operações de arquivo (list_project_files, read_file, write_file)
 │   ├── math_tools.py    # Cálculo matemático (calculate)
 │   └── multi_agent.py   # Orquestração de subagentes (spawn_subagents_parallel)
+├── tests/               # Testes automatizados (pytest)
 └── uv.lock              # Dependências travadas (lock)
 ```
 
@@ -283,13 +290,13 @@ O projeto (`pyproject.toml`) declara os seguintes metadados e dependências de r
 
 | Metadado | Valor |
 |----------|-------|
-| **Nome** | `teste` *(placeholder)* |
+| **Nome** | `agnostic-agent` |
 | **Versão** | `0.1.0` |
-| **Descrição** | `Add your description here` *(placeholder)* |
+| **Descrição** | `A provider-agnostic autonomous AI agent loop with parallel multi-agent orchestration and rich terminal interface` |
 | **Python** | `>=3.14` |
 | **Build system** | Não declarado (gerenciado via `uv`, ver `uv.lock`) |
 | **Scripts/entry-points** | Nenhum registrado em `pyproject.toml` |
-| **Dev/optional deps** | Nenhuma declarada |
+| **Dev/optional deps** | Grupo `[dependency-groups].dev` com `pytest>=9.1.1` |
 
 **Dependências de runtime** (todas com restrição de versão mínima `>=`, sem limite superior):
 
@@ -300,7 +307,7 @@ O projeto (`pyproject.toml`) declara os seguintes metadados e dependências de r
 - `python-dotenv>=1.2.2` — carregamento de variáveis de ambiente do `.env`
 - `rich>=15.0.0` — formatação/UI de terminal (painéis, markdown, syntax highlighting) usada pela CLI e pelos subagentes
 
-> 📌 Observação: não há seção `[build-system]`, `[project.optional-dependencies]` ou `[project.scripts]` no `pyproject.toml`. O projeto é gerenciado com **`uv`** (há um `uv.lock` na raiz). Para expor um comando de console, adicione um bloco `[project.scripts]` (ex.: `teste = "cli:main"`).
+> 📌 Observação: não há seção `[build-system]` ou `[project.scripts]` no `pyproject.toml`. O projeto é gerenciado com **`uv`** (há um `uv.lock` na raiz). Para expor um comando de console, adicione um bloco `[project.scripts]` (ex.: `agnostic-agent = "cli:main"`).
 
 ## 🔐 Notas de Segurança
 
@@ -315,7 +322,7 @@ Licença MIT — sinta-se livre para usar e modificar em seus projetos.
 
 ## 🤝 Contribuindo
 
-1. Faça um fork do repositório
+1. Faque um fork do repositório
 2. Crie uma branch de feature
 3. Faça suas alterações
 4. Envie um pull request

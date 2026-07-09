@@ -2,7 +2,7 @@ import os
 import time
 import pytest
 from providers import get_provider
-from agent import Agent, MemoryManager
+from agent import Agent
 from tools import TOOLS_METADATA, TOOLS_MAP
 
 # This benchmark test runs real LLM calls and is skipped if no API key is configured.
@@ -14,7 +14,6 @@ def test_real_call_single_agent_reasoning():
     """
     Runs a real single-agent ReAct loop that performs mathematical calculation,
     writes the result to a temporary file, and verifies the file exists and is correct.
-    This validates that MemoryManager doesn't degrade the agent's ability to think and use tools.
     """
     provider_name = os.environ.get("AGENT_PROVIDER", "openrouter")
     model_name = os.environ.get("AGENT_MODEL", "tencent/hy3:free")
@@ -25,15 +24,11 @@ def test_real_call_single_agent_reasoning():
         api_key=OPENROUTER_KEY
     )
     
-    # We use a custom memory manager with tighter constraints to force truncation optimization
-    memory_manager = MemoryManager(max_tool_output_chars=1000, max_full_tool_outputs=2)
-    
     agent = Agent(
         provider=provider,
         tools=TOOLS_METADATA,
         tools_map=TOOLS_MAP,
-        max_steps=10,
-        memory_manager=memory_manager
+        max_steps=10
     )
     
     test_filename = "benchmark_single_agent_result.txt"
