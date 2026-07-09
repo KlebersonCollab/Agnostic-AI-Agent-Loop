@@ -106,6 +106,57 @@ TOOLS_METADATA = [
             },
             "required": ["tasks"]
         }
+    ),
+    ToolDefinition(
+        name="patch_file",
+        description="Safely edits a file by replacing an exact, unique target block of text with a replacement block. Use this instead of write_file for modifying existing code to avoid rewriting the whole file.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "The relative path of the file to edit, e.g., 'README.md'"
+                },
+                "target_block": {
+                    "type": "string",
+                    "description": "The exact block of code/text in the file that you want to replace. Must match the spacing and indentation exactly."
+                },
+                "replacement_block": {
+                    "type": "string",
+                    "description": "The new block of code/text to replace the target block with."
+                }
+            },
+            "required": ["filename", "target_block", "replacement_block"]
+        }
+    ),
+    ToolDefinition(
+        name="search_grep",
+        description="Searches for a query string or regex pattern recursively in the workspace files. Use this to locate functions, classes, imports, or variable usage.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The query string or regex pattern to search for."
+                },
+                "path": {
+                    "type": "string",
+                    "description": "The directory to search in, defaults to '.'",
+                    "default": "."
+                },
+                "is_regex": {
+                    "type": "boolean",
+                    "description": "True if the query is a regular expression, False otherwise.",
+                    "default": False
+                },
+                "case_insensitive": {
+                    "type": "boolean",
+                    "description": "True to perform case-insensitive search, False otherwise.",
+                    "default": True
+                }
+            },
+            "required": ["query"]
+        }
     )
 ]
 
@@ -114,6 +165,8 @@ TOOLS_MAP = {
     "list_project_files": io_tools.list_project_files,
     "read_file": io_tools.read_file,
     "write_file": io_tools.write_file,
+    "patch_file": io_tools.patch_file,
+    "search_grep": io_tools.search_grep,
     "calculate": math_tools.calculate,
     "spawn_subagents_parallel": multi_agent.spawn_subagents_parallel
 }

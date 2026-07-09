@@ -1,8 +1,9 @@
 import os
+import re
 import threading
 from typing import Optional
 
-# Thread safety lock for writing operations
+# Thread safety lock for writing/modifying operations
 _file_write_lock = threading.Lock()
 
 def list_project_files(path: str = ".") -> str:
@@ -86,3 +87,83 @@ def write_file(filename: str, content: str) -> str:
         return f"Success: File '{filename}' written successfully."
     except Exception as e:
         return f"Error writing file '{filename}': {e}"
+
+
+def patch_file(filename: str, target_block: str, replacement_block: str) -> str:
+    """
+    Safely edits a file by replacing an exact, unique target block of text with a replacement block.
+    This avoids rewriting the entire file and is thread-safe.
+    """
+    try:
+        # Resolve real path to ensure it's in the workspace
+        abs_path = os.path.abspath(filename)
+        cwd = os.getcwd()
+        if not abs_path.startswith(cwd):
+            return "Error: Access denied. Cannot write files outside the project directory."
+
+        if not os.path.exists(abs_path):
+            return f"Error: File '{filename}' does not exist."
+
+        with _file_write_lock:
+            with open(abs_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Verify target block exists
+            occurrences = content.count(target_block)
+            if occurrences == 0:
+                return (
+                    f"Error: Target block was not found in '{filename}'. "
+                    f"Make sure you specify the exact characters, spacing, and indentations."
+                )
+            if occurrences > 1:
+                return (
+                    f"Error: Target block was found {occurrences} times in '{filename}'. "
+                    f"Please provide a more unique target block to avoid replacing wrong segments."
+                )
+
+            # Apply replacement
+            new_content = content.replace(target_block, replacement_block, 1)
+            with open(abs_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+
+        return f"Success: File '{filename}' patched successfully."
+    except Exception as e:
+        return f"Error patching file '{filename}': {e}"
+
+
+def search_grep(query: str, path: str = ".", is_regex: bool = False, case_insensitive: bool = True) -> str:
+    """
+    Searches for a query string or regex pattern recursively in the workspace files.
+    """
+    try:
+        ignored = {".git", ".venv", "__pycache__", ".pytest_cache", ".idea", ".vscode"}
+        flags = re.IGNORECASE if case_insensitive else 0
+        
+        # Compile pattern
+        if is_regex:
+            pattern = re.compile(query, flags)
+        else:
+            pattern = re.compile(re.escape(query), flags)
+            
+        results = []
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if d not in ignored]
+            
+            for f in files:
+                # Search source/text files only
+                if f.endswith((".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml", ".ini", ".env", ".example")):
+                    file_path = os.path.relpath(os.path.join(root, f), path)
+                    
+                    try:
+                        with open(os.path.join(root, f), "r", encoding="utf-8", errors="ignore") as file_handle:
+                            for line_num, line in enumerate(file_handle, 1):
+                                if pattern.search(line):
+                                    results.append(f"{file_path}:{line_num}: {line.strip()}")
+                    except Exception:
+                        pass
+                        
+        if not results:
+            return f"No matches found for '{query}'."
+        return "\n".join(results[:100]) # Cap at 100 results to avoid context bloating
+    except Exception as e:
+        return f"Error executing search: {e}"
