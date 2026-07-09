@@ -78,11 +78,42 @@ O projeto é organizado em módulos, cada um com uma responsabilidade bem defini
 git clone <repo-url>
 cd <diretorio-do-projeto>
 
-# Usando uv (recomendado — gerenciador usado pelo projeto, veja uv.lock)
+# Usando uv (gerenciador usado pelo projeto, veja uv.lock)
 uv sync
 
 # Ou usando pip
 pip install -e .
+```
+
+### Instalação Global como Ferramenta (`uv` / `pip`)
+
+Você pode compilar e instalar o agente como uma ferramenta de linha de comando global. Graças ao `ContextBuilder` dinâmico e às resoluções de caminho absoluto, a ferramenta funcionará em qualquer diretório da sua máquina, acessando as skills/regras embutidas e operando sobre a pasta onde foi executada.
+
+**Usando `uv` (Recomendado):**
+```bash
+# Instalar a ferramenta globalmente
+uv tool install .
+
+# Executar a partir de qualquer pasta
+agnostic-agent --prompt "Explique a estrutura deste diretório"
+```
+
+**Usando `pip`:**
+```bash
+# Instalar globalmente no ambiente Python do usuário
+pip install .
+
+# Executar a partir de qualquer pasta
+agnostic-agent --prompt "Explique a estrutura deste diretório"
+```
+
+Para atualizar a ferramenta instalada globalmente após modificar o código:
+```bash
+# Com uv
+uv tool install --force .
+
+# Com pip
+pip install --upgrade .
 ```
 
 ### Configuração
