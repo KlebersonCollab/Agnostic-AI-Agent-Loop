@@ -167,6 +167,9 @@ O agente tem acesso a estas ferramentas (definidas no pacote `tools/` e expostas
 | `list_project_files` | Lista arquivos/diretórios recursivamente (ignora `.git`, `.venv`, `__pycache__`, `.pytest_cache`, `.idea`, `.vscode`) | `path` (opcional, padrão: ".") |
 | `read_file` | Lê o conteúdo de um arquivo (restrito ao diretório do projeto); suporta leitura de um intervalo de linhas via `start_line`/`end_line` (1-indexed, inclusivo) | `filename` (obrigatório), `start_line` (opcional), `end_line` (opcional) |
 | `write_file` | Cria/sobrescreve um arquivo com conteúdo (restrito ao diretório do projeto; cria diretórios pais; *thread-safe*) | `filename`, `content` (ambos obrigatórios) |
+| `patch_file` | **Edição cirúrgica de arquivos**: substitui um bloco de texto *exato e único* por um bloco de substituição (evita reescrever o arquivo inteiro); *thread-safe*. Falha se o bloco não for encontrado ou aparecer mais de uma vez | `filename`, `target_block`, `replacement_block` (todos obrigatórios) |
+| `search_grep` | **Busca em arquivos**: procura uma string ou padrão *regex* recursivamente nos arquivos do workspace (somente `.py`, `.toml`, `.md`, `.txt`, `.json`, `.yaml`, `.yml`, `.ini`, `.env`, `.example`; limitado a 100 resultados) | `query` (obrigatório), `path` (opcional, padrão: "."), `is_regex` (opcional, padrão: `False`), `case_insensitive` (opcional, padrão: `True`) |
+| `get_outline` | **Estrutura de código**: faz o *parse* (via `ast`) de um arquivo Python e retorna um *outline* de imports, classes, métodos e funções — útil para entender a estrutura sem ler o arquivo inteiro | `filename` (obrigatório, deve ser `.py`) |
 | `calculate` | Avalia expressões matemáticas (apenas números e operadores básicos) | `expression` (obrigatório) |
 | `spawn_subagents_parallel` | **Orquestração multi-agente**: dispara vários subagentes especializados em paralelo para executar tarefas concorrentemente | `tasks` (obrigatório): lista de `{"role_description", "prompt"}` |
 
@@ -277,12 +280,40 @@ elif provider_name == "meu_custom":
 │   └── anthropic.py     # AnthropicProvider
 ├── tools/               # Pacote de ferramentas do agente
 │   ├── __init__.py      # Expõe TOOLS_METADATA, TOOLS_MAP e set_active_provider
-│   ├── io_tools.py      # Operações de arquivo (list_project_files, read_file, write_file)
+│   ├── io_tools.py      # Operações de arquivo e código (list_project_files, read_file, write_file, patch_file, search_grep, get_outline)
 │   ├── math_tools.py    # Cálculo matemático (calculate)
 │   └── multi_agent.py   # Orquestração de subagentes (spawn_subagents_parallel)
 ├── tests/               # Testes automatizados (pytest)
 └── uv.lock              # Dependências travadas (lock)
 ```
+
+## 🧪 Testes
+
+O projeto possui uma suíte de testes automatizados com **pytest** (grupo de dependências `dev`). Os testes cobrem o loop do agente, as ferramentas e a factory de provedores — sem exigir chamadas reais de API (exceto o *benchmark*, que é opcional).
+
+| Arquivo | O que cobre |
+|---------|-------------|
+| `tests/test_agent.py` | Loop ReAct do `Agent` (pensar → chamar ferramenta → resposta final) usando um `MockProvider` |
+| `tests/test_io_tools.py` | `read_file`, `write_file`, `list_project_files` e a restrição de segurança (acesso negado fora do workspace) |
+| `tests/test_math_tools.py` | `calculate` (adição, parênteses, divisão, caracteres inválidos, erro de sintaxe) |
+| `tests/test_new_tools.py` | `search_grep`, `patch_file` (sucesso, alvo não encontrado, alvo duplicado) e `get_outline` |
+| `tests/test_providers.py` | Factory `get_provider` (validação de nome inválido e inicialização de `openai`, `openai_compatible`, `openrouter`) |
+| `tests/test_benchmark_real_calls.py` | *Benchmark* com chamadas **reais** de LLM (single-agent e multi-agent); pulado automaticamente se nenhuma `OPENROUTER_API_KEY` válida estiver configurada |
+
+Para executar os testes (requer `uv`):
+
+```bash
+# Instala as dependências de dev (inclui pytest)
+uv sync
+
+# Roda toda a suíte
+uv run pytest
+
+# Roda um arquivo específico
+uv run pytest tests/test_math_tools.py
+```
+
+> ⚠️ Os testes de *benchmark* (`test_benchmark_real_calls.py`) fazem chamadas reais para a API e consomem créditos. Eles são ignorados automaticamente a menos que uma `OPENROUTER_API_KEY` válida esteja presente no ambiente/`.env`.
 
 ## 📦 Dependências
 
@@ -311,10 +342,10 @@ O projeto (`pyproject.toml`) declara os seguintes metadados e dependências de r
 
 ## 🔐 Notas de Segurança
 
-- As ferramentas `read_file` e `write_file` são restritas ao diretório do projeto (não conseguem acessar arquivos externos).
+- As ferramentas `read_file`, `write_file` e `patch_file` são restritas ao diretório do projeto (não conseguem acessar arquivos externos). A `get_outline` também valida o caminho e exige arquivos `.py`.
 - Chaves de API devem ser armazenadas em `.env`, que **já está listado no `.gitignore`** e nunca deve ser commitado. Se você já versionou um `.env`, gere novas chaves e remova o arquivo do histórico (`git rm --cached .env` + filtro de histórico).
 - A ferramenta `calculate` usa `eval()` com `__builtins__` desabilitado e uma lista restrita de caracteres — apenas números e operadores matemáticos básicos são permitidos.
-- A escrita de arquivos (`write_file`) é protegida por um *lock* de thread (`threading.Lock`), garantindo segurança em execuções paralelas de subagentes.
+- A escrita/edição de arquivos (`write_file` e `patch_file`) é protegida por um *lock* de thread (`threading.Lock`), garantindo segurança em execuções paralelas de subagentes.
 
 ## 📝 Licença
 
