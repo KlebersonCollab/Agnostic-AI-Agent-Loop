@@ -15,3 +15,7 @@ wheels/
 # Runtime checkpoint artifacts (agent handover / session resume)
 checkpoint.json
 checkpoint.json.old
+
+# Local memory database
+.agents/memory.db
+

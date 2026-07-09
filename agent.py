@@ -1,7 +1,9 @@
 import os
 import json
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from providers import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
+from memory import AgentMemory
 
 SYSTEM_PROMPT = """You are a helpful autonomous agent.
 You solve tasks step-by-step.
@@ -69,6 +71,10 @@ class Agent:
         self.handover_checkpoint: Optional[str] = None
 
     def run(self, user_prompt: str):
+        self.session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        self.memory = AgentMemory()
+        self.memory.create_session(self.session_id, user_prompt)
+
         self.history.append(ChatMessage(role=MessageRole.USER, content=user_prompt))
         self.exit_reason = None
         self.handover_checkpoint = None
@@ -123,9 +129,25 @@ class Agent:
             
             self.history.append(response_msg)
 
+            # Log assistant thought/response to memory database
+            if response_msg.content or response_msg.tool_calls:
+                self.memory.add_episode(
+                    session_id=self.session_id,
+                    step_number=step,
+                    role="assistant",
+                    content=response_msg.content,
+                    tool_calls=[tc.model_dump() for tc in response_msg.tool_calls] if response_msg.tool_calls else None
+                )
+
             if is_emergency:
                 self.handover_checkpoint = response_msg.content
                 self.exit_reason = "MAX_STEPS_REACHED"
+                
+                # Save handover report in memory database
+                self.memory.update_session_results(
+                    session_id=self.session_id,
+                    handover_report=self.handover_checkpoint
+                )
                 
                 if self.write_checkpoint_file:
                     checkpoint_data = {
@@ -142,6 +164,7 @@ class Agent:
                         if self.listener:
                             self.listener.on_error(f"Failed to save checkpoint.json: {e}")
                 
+                self.memory.close()
                 break
 
             if response_msg.tool_calls:
@@ -165,6 +188,29 @@ class Agent:
                             result = f"Success: Skill '{name}' has been unloaded from your system prompt."
                         else:
                             result = f"Error: Skill '{name}' was not loaded."
+                    elif tool_name == "search_memory":
+                        query = tool_args.get("query")
+                        category = tool_args.get("category")
+                        try:
+                            search_results = self.memory.search(query, category)
+                            if not search_results:
+                                result = f"No memories found matching '{query}'."
+                            else:
+                                formatted_results = []
+                                for idx, res in enumerate(search_results, 1):
+                                    timestamp = res["session_timestamp"] or "Unknown"
+                                    step_info = f", Step {res['step_number']}" if res["step_number"] is not None else ""
+                                    formatted_results.append(
+                                        f"--- Memory Match #{idx} ---\n"
+                                        f"Session ID: {res['session_id']}\n"
+                                        f"Date: {timestamp}{step_info}\n"
+                                        f"Category: {res['category']}\n"
+                                        f"Original Task: {res['task_prompt']}\n"
+                                        f"Content:\n{res['content']}\n"
+                                    )
+                                result = "\n".join(formatted_results)
+                        except Exception as e:
+                            result = f"Error searching memory: {e}"
                     elif tool_name in self.tools_map:
                         try:
                             # Dynamically call the python function mapped to the tool name
@@ -177,6 +223,14 @@ class Agent:
                     if self.listener:
                         self.listener.on_tool_output(tool_name, result)
 
+                    # Log tool output to memory database
+                    self.memory.add_episode(
+                        session_id=self.session_id,
+                        step_number=step,
+                        role="tool",
+                        content=result
+                    )
+
                     self.history.append(
                         ChatMessage(
                             role=MessageRole.TOOL,
@@ -187,10 +241,18 @@ class Agent:
                     )
                 continue
             else:
+                # Log final response summary to memory database
+                self.memory.update_session_results(
+                    session_id=self.session_id,
+                    final_summary=response_msg.content
+                )
+                
                 if self.listener:
                     self.listener.on_complete()
+                self.memory.close()
                 break
         else:
             if self.listener:
                 self.listener.on_error("Reached maximum number of steps without completing.")
+            self.memory.close()
 

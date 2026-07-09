@@ -165,6 +165,16 @@ class ContextBuilder:
         """Compiles the dynamic system prompt with active rules, skills metadata, and active skills details."""
         prompt_parts = [self.base_system_prompt.strip()]
         
+        # Memory & Source of Truth Constraints
+        prompt_parts.append(
+            "\n## Memory & Source of Truth Constraints\n"
+            "- You have access to a SQLite FTS5 search index via the `search_memory` tool. This index contains historical logs "
+            "(thoughts, tool outputs, task objectives, and handover checkpoints) from past runs.\n"
+            "- **CRITICAL**: Memory logs are historical. Code files change. Always treat the physical workspace files "
+            "as the ultimate source of truth. If a memory log describes a file or function signature that contradicts the "
+            "contents of the file as read by `read_file` or `get_outline`, the current file content is correct. Use memory as a guide, not a final truth."
+        )
+        
         # 1. Rules & Constraints
         if self.active_rules:
             prompt_parts.append("\n## Active Rules & Instructions Constraints")

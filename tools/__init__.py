@@ -226,6 +226,27 @@ REGISTERED_TOOLS = [
             }
         ),
         lambda name: "Success: Skill unloaded (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="search_memory",
+            description="Search past sessions, thoughts, tool outputs, and handovers in the project memory using keywords.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search keywords or terms (e.g. 'auth bug', 'calculate outline')"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category to filter results: 'thought', 'tool_output', 'handover', 'summary', 'task', 'user_input'"
+                    }
+                },
+                "required": ["query"]
+            }
+        ),
+        lambda query, category=None: "Success: Memory searched (intercepted)"
     )
 ]
 
