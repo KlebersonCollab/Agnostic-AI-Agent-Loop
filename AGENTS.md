@@ -19,6 +19,7 @@ The objective is to enforce a **Spec Driven Development (SDD)** lifecycle and pr
 2. Read `.specs/knowledge/<type>s/<slug>.md` — check for known patterns
 3. **If ANY placeholder is empty or contains `<!-- PREENCHER ...` text** → TRIGGER AUTO-DISCOVERY (Step A below)
 4. **If ALL sections are filled** → proceed with development
+5. **ALWAYS** prefer using multi-agents.
 
 ---
 
