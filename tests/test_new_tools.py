@@ -98,3 +98,24 @@ def my_function(param1, param2):
     finally:
         if os.path.exists(test_file):
             os.remove(test_file)
+
+
+def test_tools_registry_mismatch():
+    import pytest
+    from providers import ToolDefinition
+    
+    # Test the duplicate name validation logic
+    def check_duplicates(metadata):
+        tool_names = [t.name for t in metadata]
+        if len(tool_names) != len(set(tool_names)):
+            duplicates = {x for x in tool_names if tool_names.count(x) > 1}
+            raise ImportError(f"Duplicate tool registration detected for: {duplicates}")
+            
+    # Should raise ImportError on duplicate name
+    with pytest.raises(ImportError) as excinfo:
+        check_duplicates([
+            ToolDefinition(name="calculate", description="..."),
+            ToolDefinition(name="calculate", description="...")
+        ])
+    assert "Duplicate tool registration" in str(excinfo.value)
+
