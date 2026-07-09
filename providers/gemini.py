@@ -8,10 +8,11 @@ from .base import BaseLLMProvider, ChatMessage, MessageRole, ToolCall, ToolDefin
 class GeminiProvider(BaseLLMProvider):
     def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs):
         super().__init__(model_name, api_key, **kwargs)
+        self.api_key = self.api_key or os.environ.get("GEMINI_API_KEY")
         from google import genai
         
         self.client = genai.Client(
-            api_key=self.api_key or os.environ.get("GEMINI_API_KEY")
+            api_key=self.api_key
         )
 
     def _generate(

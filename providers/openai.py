@@ -5,14 +5,15 @@ from .base import BaseLLMProvider, ChatMessage, MessageRole, ToolCall, ToolDefin
 
 # OpenAI Provider Implementation
 class OpenAIProvider(BaseLLMProvider):
-    def __init__(self, model_name: str, api_key: Optional[str] = None, base_url: Optional[str] = None, **kwargs):
+    def __init__(self, model_name: str, api_key: Optional[str] = None, base_url: Optional[str] = None, default_headers: Optional[Dict[str, str]] = None, **kwargs):
         super().__init__(model_name, api_key, **kwargs)
+        self.api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
         from openai import OpenAI
         
-        # Falls back to OPENAI_API_KEY environment variable if api_key is None
         self.client = OpenAI(
-            api_key=self.api_key or os.environ.get("OPENAI_API_KEY"),
-            base_url=base_url or os.environ.get("OPENAI_BASE_URL")
+            api_key=self.api_key,
+            base_url=base_url or os.environ.get("OPENAI_BASE_URL"),
+            default_headers=default_headers
         )
 
     def _generate(
@@ -162,6 +163,6 @@ class OpenRouterProvider(OpenAIProvider):
             model_name=model_name,
             api_key=api_key or os.environ.get("OPENROUTER_API_KEY"),
             base_url=base_url,
+            default_headers=default_headers,
             **kwargs
         )
-        self.client.default_headers.update(default_headers)

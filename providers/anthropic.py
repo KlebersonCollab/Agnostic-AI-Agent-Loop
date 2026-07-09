@@ -6,10 +6,11 @@ from .base import BaseLLMProvider, ChatMessage, MessageRole, ToolCall, ToolDefin
 class AnthropicProvider(BaseLLMProvider):
     def __init__(self, model_name: str, api_key: Optional[str] = None, **kwargs):
         super().__init__(model_name, api_key, **kwargs)
+        self.api_key = self.api_key or os.environ.get("ANTHROPIC_API_KEY")
         from anthropic import Anthropic
         
         self.client = Anthropic(
-            api_key=self.api_key or os.environ.get("ANTHROPIC_API_KEY")
+            api_key=self.api_key
         )
 
     def _generate(
