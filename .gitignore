@@ -11,3 +11,7 @@ wheels/
 
 # Environment variables / secrets (never commit API keys)
 .env
+
+# Runtime checkpoint artifacts (agent handover / session resume)
+checkpoint.json
+checkpoint.json.old

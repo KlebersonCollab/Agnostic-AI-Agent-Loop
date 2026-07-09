@@ -88,3 +88,144 @@ def test_agent_react_loop_with_tool_call():
     assert listener.tool_calls == [("calculate", {"expression": "2 + 2"})]
     assert listener.tool_outputs == [("calculate", "4")]
     assert listener.completed is True
+
+
+def test_agent_emergency_handover_parent():
+    import os
+    import json
+    from providers.base import ToolCall, ToolDefinition
+    responses = [
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="Thinking about the task.",
+            tool_calls=[
+                ToolCall(id="dummy_1", name="calculate", arguments={"expression": "1 + 1"})
+            ]
+        ),
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="Handover report: Completed task A. Blocker: none. Next step: task B."
+        )
+    ]
+    
+    class HandoverMockProvider(BaseLLMProvider):
+        def __init__(self, responses):
+            super().__init__("mock-model")
+            self.responses = responses
+            self.call_count = 0
+            self.received_tools = []
+
+        def _generate(self, messages, tools=None, temperature=0.7, max_tokens=None):
+            self.received_tools.append(tools)
+            resp = self.responses[self.call_count]
+            self.call_count += 1
+            return resp
+
+    provider = HandoverMockProvider(responses)
+    
+    # Ensure any existing checkpoint is removed
+    if os.path.exists("checkpoint.json"):
+        os.remove("checkpoint.json")
+
+    tools_metadata = [
+        ToolDefinition(
+            name="calculate",
+            description="Evaluate a math expression",
+            parameters={"type": "object", "properties": {"expression": {"type": "string"}}}
+        )
+    ]
+    tools_map = {
+        "calculate": lambda expression: "2"
+    }
+
+    agent = Agent(
+        provider=provider,
+        tools=tools_metadata,
+        tools_map=tools_map,
+        max_steps=3,
+        write_checkpoint_file=True
+    )
+    
+    agent.run("Do a complex task")
+    
+    assert agent.exit_reason == "MAX_STEPS_REACHED"
+    assert "Handover report" in agent.handover_checkpoint
+    
+    # Verify that in step 2 (pen-ultimate), tools was set to None
+    assert len(provider.received_tools) == 2
+    assert provider.received_tools[0] == tools_metadata  # self.tools passed originally
+    assert provider.received_tools[1] is None  # emergency step has tools=None
+    
+    # Verify file was written
+    assert os.path.exists("checkpoint.json")
+    with open("checkpoint.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    assert data["exit_reason"] == "MAX_STEPS_REACHED"
+    assert "Handover report" in data["handover_checkpoint"]
+    assert len(data["history"]) > 0
+    
+    # Cleanup
+    os.remove("checkpoint.json")
+
+
+def test_agent_emergency_handover_subagent():
+    import os
+    from providers.base import ToolCall, ToolDefinition
+    responses = [
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="Thinking about the task.",
+            tool_calls=[
+                ToolCall(id="dummy_1", name="calculate", arguments={"expression": "1 + 1"})
+            ]
+        ),
+        ChatMessage(
+            role=MessageRole.ASSISTANT,
+            content="Handover report: Completed subtask A."
+        )
+    ]
+    
+    class HandoverMockProvider(BaseLLMProvider):
+        def __init__(self, responses):
+            super().__init__("mock-model")
+            self.responses = responses
+            self.call_count = 0
+            self.received_tools = []
+
+        def _generate(self, messages, tools=None, temperature=0.7, max_tokens=None):
+            self.received_tools.append(tools)
+            resp = self.responses[self.call_count]
+            self.call_count += 1
+            return resp
+
+    provider = HandoverMockProvider(responses)
+    
+    if os.path.exists("checkpoint.json"):
+        os.remove("checkpoint.json")
+
+    tools_metadata = [
+        ToolDefinition(
+            name="calculate",
+            description="Evaluate a math expression",
+            parameters={"type": "object", "properties": {"expression": {"type": "string"}}}
+        )
+    ]
+    tools_map = {
+        "calculate": lambda expression: "2"
+    }
+
+    agent = Agent(
+        provider=provider,
+        tools=tools_metadata,
+        tools_map=tools_map,
+        max_steps=3,
+        write_checkpoint_file=False
+    )
+    
+    agent.run("Do a subagent task")
+    
+    assert agent.exit_reason == "MAX_STEPS_REACHED"
+    assert "Handover report" in agent.handover_checkpoint
+    assert not os.path.exists("checkpoint.json")
+
+

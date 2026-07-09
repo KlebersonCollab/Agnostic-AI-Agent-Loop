@@ -1,3 +1,5 @@
+import os
+import json
 from typing import List, Dict, Any, Optional
 from providers import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
 
@@ -44,40 +46,93 @@ class Agent:
         tools: List[ToolDefinition],
         tools_map: Dict[str, Any],
         listener: Optional[AgentListener] = None,
-        max_steps: int = 15
+        max_steps: int = 15,
+        write_checkpoint_file: bool = True
     ):
         self.provider = provider
         self.tools = tools
         self.tools_map = tools_map
         self.listener = listener
         self.max_steps = max_steps
+        self.write_checkpoint_file = write_checkpoint_file
         self.history: List[ChatMessage] = [
             ChatMessage(role=MessageRole.SYSTEM, content=SYSTEM_PROMPT)
         ]
+        self.exit_reason: Optional[str] = None
+        self.handover_checkpoint: Optional[str] = None
 
     def run(self, user_prompt: str):
         self.history.append(ChatMessage(role=MessageRole.USER, content=user_prompt))
+        self.exit_reason = None
+        self.handover_checkpoint = None
 
         for step in range(1, self.max_steps + 1):
             if self.listener:
                 self.listener.on_step_start(step, self.max_steps)
             
-            try:
-                response_msg = self.provider.generate(
-                    messages=self.history,
-                    tools=self.tools,
-                    temperature=0.2
+            is_emergency = (self.max_steps > 2) and (step == self.max_steps - 1)
+            
+            if is_emergency:
+                # Force emergency handover checkpoint prompting
+                warning_prompt = (
+                    "⚠️ SYSTEM WARNING: You are on the pen-ultimate step of this session. "
+                    "You must NOT call any tools. Instead, write a detailed handover checkpoint report "
+                    "in Markdown summarizing your progress so far. Use the following structure:\n"
+                    "- **Progress Achieved**: What has been completed/created so far.\n"
+                    "- **Blockers/Delays**: Why the task was not fully completed, and any errors encountered.\n"
+                    "- **Backlog**: Detailed list of remaining tasks in order of priority.\n"
+                    "- **Next Step**: The exact prompt/instruction for the next agent to resume."
                 )
-            except Exception as e:
-                if self.listener:
-                    self.listener.on_error(f"Error communicating with provider: {e}")
-                break
+                self.history.append(ChatMessage(role=MessageRole.SYSTEM, content=warning_prompt))
+                
+                try:
+                    response_msg = self.provider.generate(
+                        messages=self.history,
+                        tools=None,  # Force no tool calling
+                        temperature=0.2
+                    )
+                except Exception as e:
+                    if self.listener:
+                        self.listener.on_error(f"Error communicating with provider during emergency handover: {e}")
+                    break
+            else:
+                try:
+                    response_msg = self.provider.generate(
+                        messages=self.history,
+                        tools=self.tools,
+                        temperature=0.2
+                    )
+                except Exception as e:
+                    if self.listener:
+                        self.listener.on_error(f"Error communicating with provider: {e}")
+                    break
 
             if response_msg.content:
                 if self.listener:
                     self.listener.on_thought(response_msg.content)
             
             self.history.append(response_msg)
+
+            if is_emergency:
+                self.handover_checkpoint = response_msg.content
+                self.exit_reason = "MAX_STEPS_REACHED"
+                
+                if self.write_checkpoint_file:
+                    checkpoint_data = {
+                        "exit_reason": self.exit_reason,
+                        "handover_checkpoint": self.handover_checkpoint,
+                        "history": [msg.model_dump() for msg in self.history]
+                    }
+                    try:
+                        with open("checkpoint.json", "w", encoding="utf-8") as f:
+                            json.dump(checkpoint_data, f, indent=2, ensure_ascii=False)
+                        if self.listener:
+                            self.listener.on_error("🚨 Process interrupted preventively. Checkpoint saved to checkpoint.json.")
+                    except Exception as e:
+                        if self.listener:
+                            self.listener.on_error(f"Failed to save checkpoint.json: {e}")
+                
+                break
 
             if response_msg.tool_calls:
                 for tool_call in response_msg.tool_calls:
@@ -116,3 +171,4 @@ class Agent:
         else:
             if self.listener:
                 self.listener.on_error("Reached maximum number of steps without completing.")
+

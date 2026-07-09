@@ -153,6 +153,52 @@ def run_cli():
     console.print(welcome_panel)
 
     prompt = args.prompt
+    checkpoint_file = "checkpoint.json"
+    checkpoint_loaded = False
+    
+    if not prompt and os.path.exists(checkpoint_file):
+        console.print(Panel(
+            "[yellow]⚠️  Found a checkpoint from a previous session ('checkpoint.json').[/yellow]\n"
+            "The previous task reached the execution step limit before completion.",
+            title="[bold yellow]Checkpoint Detected[/bold yellow]",
+            border_style="yellow"
+        ))
+        try:
+            with open(checkpoint_file, "r", encoding="utf-8") as f:
+                checkpoint_data = json.load(f)
+            
+            report = checkpoint_data.get("handover_checkpoint", "")
+            if report:
+                console.print(Panel(
+                    Markdown(report),
+                    title="📋 [bold magenta]Handover Checkpoint Report[/bold magenta]",
+                    border_style="magenta",
+                    expand=False
+                ))
+                
+                try:
+                    resume_choice = console.input("[bold cyan]Do you want to resume this task? (y/n, default y): [/bold cyan]").strip().lower()
+                except (KeyboardInterrupt, EOFError):
+                    console.print("\n[bold red]Exiting.[/bold red]")
+                    sys.exit(0)
+                    
+                if resume_choice in ("", "y", "yes"):
+                    prompt = (
+                        "Please resume the task. Your context has been purified. "
+                        "Analyze the progress achieved and the backlog of remaining tasks from the handover report, "
+                        "then continue execution by performing the next immediate steps.\n\n"
+                        f"### Handover Checkpoint Report\n{report}"
+                    )
+                    checkpoint_loaded = True
+                else:
+                    try:
+                        os.rename(checkpoint_file, "checkpoint.json.old")
+                        console.print("[dim]Renamed old checkpoint to 'checkpoint.json.old' to avoid conflict.[/dim]")
+                    except Exception:
+                        pass
+        except Exception as e:
+            console.print(f"[red]Error loading checkpoint: {e}[/red]")
+
     if not prompt:
         try:
             prompt = console.input("[bold cyan]Enter your prompt for the agent: [/bold cyan]")
@@ -180,7 +226,10 @@ def run_cli():
     set_active_provider(provider)
 
     console.print()
-    console.print(Panel(f"[bold cyan]Objective:[/bold cyan] {prompt}", border_style="cyan"))
+    console.print(Panel(
+        f"[bold cyan]Objective:[/bold cyan] {prompt if not checkpoint_loaded else 'Resume previous task from Handover Checkpoint'}", 
+        border_style="cyan"
+    ))
 
     # Setup listener and core Agent
     listener = ConsoleAgentListener()
@@ -193,3 +242,13 @@ def run_cli():
     )
     
     agent.run(prompt)
+
+    # Clean up checkpoint if completed successfully
+    if agent.exit_reason != "MAX_STEPS_REACHED":
+        if os.path.exists(checkpoint_file):
+            try:
+                os.remove(checkpoint_file)
+                console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
+            except Exception:
+                pass
+

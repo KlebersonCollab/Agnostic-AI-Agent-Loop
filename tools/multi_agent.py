@@ -71,16 +71,9 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
     if not _active_provider:
         return "Error: Active LLM Provider is not set in multi_agent module."
 
-    # Subagents can use basic tools but we exclude spawn_subagents_parallel to prevent infinite nested loops
-    subagent_tools_map = {
-        "list_project_files": list_project_files,
-        "read_file": read_file,
-        "write_file": write_file,
-        "calculate": calculate
-    }
-    
-    # Import TOOLS_METADATA dynamically to avoid circular dependencies during initialization
-    from tools import TOOLS_METADATA
+    # Import TOOLS_MAP and TOOLS_METADATA dynamically to avoid circular dependencies during initialization
+    from tools import TOOLS_METADATA, TOOLS_MAP
+    subagent_tools_map = {k: v for k, v in TOOLS_MAP.items() if k != "spawn_subagents_parallel"}
     subagent_tools_metadata = [t for t in TOOLS_METADATA if t.name != "spawn_subagents_parallel"]
 
     # Rich styles for distinct subagents
@@ -121,7 +114,8 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
             tools=subagent_tools_metadata,
             tools_map=subagent_tools_map,
             listener=sub_listener,
-            max_steps=10
+            max_steps=10,
+            write_checkpoint_file=False
         )
         # Apply custom system instructions
         agent.history[0].content = sub_system_prompt

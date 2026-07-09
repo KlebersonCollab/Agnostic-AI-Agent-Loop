@@ -128,9 +128,9 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 | `--api-key` | `str` | *(nenhum)* | — | Chave de API do provedor (opcional; recorre às variáveis de ambiente) |
 | `--base-url` | `str` | *(nenhum)* | — | URL base customizada para endpoints compatíveis com OpenAI (Ollama, Groq, locais) |
 | `--prompt` | `str` | *(nenhum)* | — | Tarefa para o agente. Se omitido, inicia o modo interativo |
-| `--max-steps` | `int` | `75` | — | Número máximo de iterações/passos do loop do agente |
+| `--max-steps` | `int` | `200` | — | Número máximo de iterações/passos do loop do agente |
 
-> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps` (padrão `75` na CLI; o construtor de `Agent` usa `15` caso nenhum valor seja passado).
+> ℹ️ O loop principal do agente chama o provedor com `temperature=0.2` (fixo) e `max_steps` definido pela flag `--max-steps` (padrão `200` na CLI; o construtor de `Agent` usa `15` caso nenhum valor seja passado).
 
 ### Fluxo de Execução
 
@@ -141,6 +141,19 @@ A interface de linha de comando é construída com a biblioteca padrão **`argpa
 5. Cria um `ConsoleAgentListener` (saída colorida no terminal) e um `Agent` com as ferramentas disponíveis e `max_steps`.
 6. Executa o loop do agente com `agent.run(prompt)`.
 
+## 💾 Checkpoint & Retomada de Sessão (Handover)
+
+O agente possui um mecanismo de **checkpoint de handover** que evita a perda de trabalho quando a tarefa não é concluída dentro do limite de passos (`--max-steps`).
+
+Como funciona (`agent.py` + `cli.py`):
+
+1. No **penúltimo passo** (`step == max_steps - 1`), o agente entra em **modo de emergência**: o sistema envia um aviso instruindo-o a **não chamar ferramentas** e a redigir um *handover checkpoint report* em Markdown (Progress Achieved, Blockers/Delays, Backlog, Next Step). Nesse passo, as ferramentas são desativadas (`tools=None`).
+2. O relatório é salvo em **`checkpoint.json`** (na raiz do projeto), junto com o `exit_reason` e o histórico completo da conversa (`history`), desde que `write_checkpoint_file=True` (padrão do `Agent`).
+3. Ao iniciar uma nova execução (`cli.py`), se existir um `checkpoint.json`, o programa o detecta e exibe o relatório, perguntando se você deseja **retomar a tarefa** (`y/n`, padrão `y`). Ao retomar, o agente recebe o relatório de handover como contexto e continua a partir dos próximos passos imediatos.
+4. Se a tarefa for concluída com sucesso (`exit_reason != "MAX_STEPS_REACHED"`), o `cli.py` **remove automaticamente** o `checkpoint.json`. Se você recusar a retomada, o arquivo é renomeado para `checkpoint.json.old` para evitar conflito.
+
+> 🔒 O `checkpoint.json` contém o histórico completo da conversa e já está listado no `.gitignore` — nunca deve ser commitado.
+
 ## 🛠️ Provedores Suportados
 
 A factory `get_provider()` (em `providers/__init__.py`) mapeia os nomes abaixo para as respectivas implementações no pacote `providers/`:
@@ -150,13 +163,17 @@ A factory `get_provider()` (em `providers/__init__.py`) mapeia os nomes abaixo p
 | `openai` | `OpenAIProvider` | Usa `OPENAI_API_KEY` / `OPENAI_BASE_URL` |
 | `gemini` | `GeminiProvider` | Usa `GEMINI_API_KEY` |
 | `anthropic` | `AnthropicProvider` | Usa `ANTHROPIC_API_KEY` |
-| `openrouter` | `OpenRouterProvider` | Usa `OPENROUTER_API_KEY`; `base_url` fixo em `https://openrouter.ai/api/v1` |
+| `openrouter` | `OpenRouterProvider` | Usa `OPENROUTER_API_KEY`; `base_url` fixo em `https://openrouter.ai/api/v1` e headers `HTTP-Referer`/`X-Title` (`X-Title: "Antigravity Agent"`) |
 | `openai_compatible` | `OpenAICompatibleProvider` | Endpoint genérico compatível com a API OpenAI |
-| `ollama` | `OpenAICompatibleProvider` | Alias; `base_url` padrão `http://localhost:11434/v1` |
+| `ollama` | `OpenAICompatibleProvider` | Alias; `base_url` padrão `http://localhost:11434/v1` e `api_key` padrão `"ollama"` |
 | `groq` | `OpenAICompatibleProvider` | Alias |
 | `deepseek` | `OpenAICompatibleProvider` | Alias |
 
 > 🔌 Todos os provedores compatíveis com a API OpenAI (`OpenAICompatibleProvider`) aceitam `--base-url` e `--api-key` customizados, o que permite plugar qualquer endpoint OpenAI-like (incluindo servidores locais).
+
+### Camada de Abstração (`providers/base.py`)
+
+Todos os provedores estendem a classe abstrata **`BaseLLMProvider`** e implementam o método `_generate(messages, tools, temperature, max_tokens)`. O método público `generate()` já provê *retry* com *backoff* exponencial (decorado com `@retry_with_backoff`) para falhas transitórias (rate limits, timeouts), relançando imediatamente erros permanentes (autenticação, chave inválida). Os modelos de dados compartilhados (Pydantic) são: `MessageRole`, `ToolCall`, `ChatMessage` e `ToolDefinition`.
 
 ## 🧰 Ferramentas Disponíveis
 
@@ -190,8 +207,8 @@ Como funciona internamente (`tools/multi_agent.py`):
 
 1. O agente pai chama `spawn_subagents_parallel` com uma lista de tarefas.
 2. Para cada tarefa, um `Agent` filho é criado reutilizando o **mesmo provedor ativo** (`set_active_provider`, definido em `tools/multi_agent.py` e chamado em `cli.py` antes de iniciar a sessão) e um `SYSTEM_PROMPT` estendido com a `role_description`.
-3. Cada subagente recebe um subconjunto de ferramentas (todas, exceto `spawn_subagents_parallel`, evitando loops aninhados infinitos) e executa seu próprio loop de raciocínio com `max_steps=10`.
-4. A execução é acompanhada **ao vivo** no terminal: o `CollectingAgentListener` imprime, em tempo real, cada passo de raciocínio, chamada de ferramenta e saída — usando uma **cor distinta por subagente** (ciano, magenta, amarelo, azul, verde, em ciclo) e um prefixo `[Subagent: <role>]` que identifica o papel. Ao final, um bloco de resumo de cada subagente é impresso em sequência.
+3. Cada subagente recebe um subconjunto fixo de ferramentas — `list_project_files`, `read_file`, `write_file` e `calculate` (a ferramenta `spawn_subagents_parallel` é **excluída** para evitar loops aninhados infinitos) — e executa seu próprio loop de raciocínio com `max_steps=10`.
+4. A execução é acompanhada **ao vivo** no terminal: o `CollectingAgentListener` imprime, em tempo real, cada passo de raciocínio, chamada de ferramenta e saída — usando uma **cor distinta por subagente** (ciano, magenta, amarelo, azul e verde, ciclando caso haja mais de 5 subagentes) e um prefixo `[Subagent: <role>]` que identifica o papel. Ao final, um bloco de resumo de cada subagente é impresso em sequência.
 5. Ao final, a ferramenta retorna um **JSON resumindo a resposta final de cada subagente**, que o agente pai pode usar para compor a resposta definitiva.
 
 ```json
@@ -259,6 +276,14 @@ elif provider_name == "meu_custom":
     return MeuProvedorCustom(model_name=model_name, api_key=api_key, **kwargs)
 ```
 
+## 🔧 Adicionando Novas Ferramentas
+
+1. Implemente a função Python no módulo apropriado (`tools/io_tools.py`, `tools/math_tools.py` etc.).
+2. Adicione um `ToolDefinition` correspondente em **`TOOLS_METADATA`** (em `tools/__init__.py`) com `name`, `description` e o JSON-Schema de `parameters`.
+3. Mapeie o `name` para a função em **`TOOLS_MAP`** (no mesmo arquivo).
+
+> ⚠️ `TOOLS_METADATA` e `TOOLS_MAP` devem permanecer sincronizados: todo nome em `TOOLS_METADATA` precisa de uma entrada em `TOOLS_MAP`.
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -273,7 +298,7 @@ elif provider_name == "meu_custom":
 ├── main.py              # Ponto de entrada (chama run_cli)
 ├── pyproject.toml       # Configuração e dependências do projeto
 ├── providers/           # Pacote de abstração dos provedores de LLM
-│   ├── __init__.py      # Expõe BaseLLMProvider, ChatMessage, MessageRole, ToolDefinition e a factory get_provider()
+│   ├── __init__.py      # Expõe BaseLLMProvider, ChatMessage, MessageRole, ToolCall, ToolDefinition e a factory get_provider()
 │   ├── base.py          # BaseLLMProvider (ABC), ChatMessage, MessageRole, ToolCall, ToolDefinition e retry_with_backoff
 │   ├── openai.py        # OpenAIProvider, OpenAICompatibleProvider (Ollama/Groq/DeepSeek) e OpenRouterProvider
 │   ├── gemini.py        # GeminiProvider
@@ -291,14 +316,14 @@ elif provider_name == "meu_custom":
 
 O projeto possui uma suíte de testes automatizados com **pytest** (grupo de dependências `dev`). Os testes cobrem o loop do agente, as ferramentas e a factory de provedores — sem exigir chamadas reais de API (exceto o *benchmark*, que é opcional).
 
-| Arquivo | O que cobre |
-|---------|-------------|
-| `tests/test_agent.py` | Loop ReAct do `Agent` (pensar → chamar ferramenta → resposta final) usando um `MockProvider` |
-| `tests/test_io_tools.py` | `read_file`, `write_file`, `list_project_files` e a restrição de segurança (acesso negado fora do workspace) |
-| `tests/test_math_tools.py` | `calculate` (adição, parênteses, divisão, caracteres inválidos, erro de sintaxe) |
-| `tests/test_new_tools.py` | `search_grep`, `patch_file` (sucesso, alvo não encontrado, alvo duplicado) e `get_outline` |
-| `tests/test_providers.py` | Factory `get_provider` (validação de nome inválido e inicialização de `openai`, `openai_compatible`, `openrouter`) |
-| `tests/test_benchmark_real_calls.py` | *Benchmark* com chamadas **reais** de LLM (single-agent e multi-agent); pulado automaticamente se nenhuma `OPENROUTER_API_KEY` válida estiver configurada |
+| Arquivo | Tipo | O que cobre |
+|---------|------|-------------|
+| `tests/test_agent.py` | Mock | Loop ReAct do `Agent` (pensar → chamar ferramenta → resposta final) usando um `MockProvider`; também testa o *handover* de emergência (com e sem escrita de `checkpoint.json`) |
+| `tests/test_io_tools.py` | Unitário | `read_file`, `write_file`, `list_project_files` e a restrição de segurança (acesso negado fora do workspace) |
+| `tests/test_math_tools.py` | Unitário | `calculate` (adição, parênteses, divisão, caracteres inválidos, erro de sintaxe) |
+| `tests/test_new_tools.py` | Unitário | `search_grep`, `patch_file` (sucesso, alvo não encontrado, alvo duplicado) e `get_outline` |
+| `tests/test_providers.py` | Mock/Init | Factory `get_provider` (validação de nome inválido e inicialização de `openai`, `openai_compatible`, `openrouter`) |
+| `tests/test_benchmark_real_calls.py` | **Real** | *Benchmark* com chamadas **reais** de LLM (single-agent e multi-agent); pulado automaticamente se nenhuma `OPENROUTER_API_KEY` válida estiver configurada |
 
 Para executar os testes (requer `uv`):
 
@@ -306,14 +331,25 @@ Para executar os testes (requer `uv`):
 # Instala as dependências de dev (inclui pytest)
 uv sync
 
-# Roda toda a suíte
+# Roda toda a suíte (o benchmark é pulado automaticamente sem chave)
 uv run pytest
 
 # Roda um arquivo específico
 uv run pytest tests/test_math_tools.py
+
+# Roda um teste específico por nome
+uv run pytest tests/test_providers.py::test_get_provider_openai_initialization
+
+# Verboso
+uv run pytest -v
 ```
 
-> ⚠️ Os testes de *benchmark* (`test_benchmark_real_calls.py`) fazem chamadas reais para a API e consomem créditos. Eles são ignorados automaticamente a menos que uma `OPENROUTER_API_KEY` válida esteja presente no ambiente/`.env`.
+> ⚠️ Os testes de *benchmark* (`test_benchmark_real_calls.py`) fazem chamadas reais para a API e consomem créditos. Eles são ignorados automaticamente a menos que uma `OPENROUTER_API_KEY` válida esteja presente no ambiente/`.env`. O modelo padrão usado nesses testes é `tencent/hy3:free` (via `AGENT_MODEL`), mas pode ser sobrescrito pelas variáveis de ambiente.
+
+### Cobertura
+
+- **Coberto:** loop do agente (ReAct + handover), ferramentas de I/O e de código, `calculate`, e a factory de provedores (`openai`, `openai_compatible`, `openrouter`).
+- **Não coberto (lacunas):** provedores `GeminiProvider` e `AnthropicProvider` (branches da factory não testados isoladamente), `cli.py`/`run_cli()`, o `CollectingAgentListener` e o fluxo de subagentes de `multi_agent.py` (exercitados apenas indiretamente pelo benchmark real), e os métodos `_generate()` reais / `retry_with_backoff`.
 
 ## 📦 Dependências
 
@@ -353,7 +389,7 @@ Licença MIT — sinta-se livre para usar e modificar em seus projetos.
 
 ## 🤝 Contribuindo
 
-1. Faque um fork do repositório
+1. Faça um fork do repositório
 2. Crie uma branch de feature
 3. Faça suas alterações
 4. Envie um pull request
