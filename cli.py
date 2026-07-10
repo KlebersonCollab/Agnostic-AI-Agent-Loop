@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import argparse
+import time
+import re
 from typing import Dict, Any
 
 from providers import get_provider
@@ -28,6 +30,7 @@ class ConsoleAgentListener(AgentListener):
     """
     def __init__(self):
         self.status = None
+        self.step_start_time = None
 
     def _stop_status(self):
         if self.status:
@@ -36,54 +39,89 @@ class ConsoleAgentListener(AgentListener):
 
     def on_step_start(self, step: int, max_steps: int):
         self._stop_status()
-        console.print()
-        console.rule(f"[bold magenta]Step {step} / {max_steps}[/bold magenta]", style="magenta")
-        # Start a beautiful loading spinner to show the LLM is thinking
-        self.status = console.status("[bold green]Agent is thinking (querying LLM)...", spinner="dots")
+        self.step_start_time = time.monotonic()
+        self.status = console.status("[bold green]Agent is thinking...", spinner="dots")
         self.status.start()
 
-    def on_thought(self, thought: str):
+    def _format_tool_call(self, name: str, arguments: Dict[str, Any]) -> str:
+        import os
+        import json
+        
+        if name == "list_project_files":
+            path = os.path.abspath(arguments.get("path") or ".")
+            return f"ListDir({path}) (ctrl+o to expand)"
+        elif name == "read_file":
+            path = os.path.abspath(arguments.get("filename") or "")
+            return f"Read({path}) (ctrl+o to expand)"
+        elif name == "write_file":
+            path = os.path.abspath(arguments.get("filename") or "")
+            if os.path.exists(path):
+                return f"Edit({path}) (ctrl+o to expand)"
+            return f"Create({path}) (ctrl+o to expand)"
+        elif name == "patch_file" or name == "patch":
+            path = os.path.abspath(arguments.get("filename") or "")
+            return f"Edit({path}) (ctrl+o to expand)"
+        elif name == "run_command":
+            cmd = arguments.get("CommandLine") or ""
+            return f"Bash({cmd}) (ctrl+o to expand)"
+        elif name == "calculate":
+            expr = arguments.get("expression") or ""
+            return f"Calc({expr})"
+        elif name == "search_grep":
+            pat = arguments.get("Query") or arguments.get("pattern") or ""
+            return f"Grep({pat})"
+        elif name == "search_memory":
+            q = arguments.get("query") or ""
+            return f"SearchMemory({q})"
+        elif name == "spawn_subagents_parallel":
+            tasks = arguments.get("tasks") or []
+            return f"Subagents({len(tasks)} tasks) (ctrl+o to expand)"
+        elif name == "load_skill":
+            sk = arguments.get("name") or ""
+            return f"LoadSkill({sk})"
+        elif name == "unload_skill":
+            sk = arguments.get("name") or ""
+            return f"UnloadSkill({sk})"
+        elif name == "manage_task":
+            tid = arguments.get("TaskId") or ""
+            return f"ManageTask(Task: {tid}) (ctrl+o to expand)"
+        elif name == "schedule":
+            prompt = arguments.get("Prompt") or ""
+            return f"Schedule({prompt}) (ctrl+o to expand)"
+        else:
+            args_str = json.dumps(arguments, ensure_ascii=False)
+            return f"{name}({args_str})"
+
+    def on_thought(self, thought: str, is_final: bool = False):
         self._stop_status()
-        # Render the thought block as Markdown in a green panel
-        panel = Panel(
-            Markdown(thought),
-            title="🤖 [bold green]Agent Thought[/bold green]",
-            border_style="green",
-            expand=False
-        )
-        console.print(panel)
+        if is_final:
+            console.print(thought)
+            console.print()
+        else:
+            elapsed = 1
+            if self.step_start_time is not None:
+                elapsed = max(1, int(time.monotonic() - self.step_start_time))
+            
+            tokens = (len(thought) + 3) // 4
+            tokens_str = f"{tokens/1000:.1f}k" if tokens >= 1000 else str(tokens)
+            
+            lines = [line.strip() for line in thought.split("\n") if line.strip()]
+            title = lines[0] if lines else "Thinking..."
+            title = re.sub(r'^(#+\s*|-\s*|\*\s*|\d+\.\s*)', '', title).strip()
+            if len(title) > 80:
+                title = title[:77] + "..."
+                
+            console.print(f"[bold dim]▸ Thought for {elapsed}s, {tokens_str} tokens[/bold dim]")
+            console.print(f"  {title}")
+            console.print()
 
     def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
         self._stop_status()
-        # Pretty print arguments in JavaScript style for cleaner visualization
-        args_json = json.dumps(arguments, indent=2, ensure_ascii=False)
-        syntax = Syntax(f"{name}(\n{args_json}\n)", "javascript", theme="monokai", background_color="default")
-        panel = Panel(
-            syntax,
-            title="🛠️ [bold yellow]Tool Call[/bold yellow]",
-            border_style="yellow",
-            expand=False
-        )
-        console.print(panel)
+        formatted = self._format_tool_call(name, arguments)
+        console.print(f"[bold dim]●[/bold dim] {formatted}")
 
     def on_tool_output(self, name: str, result: str):
         self._stop_status()
-        
-        # Check if the output is JSON
-        try:
-            parsed = json.loads(result)
-            display_content = Syntax(json.dumps(parsed, indent=2, ensure_ascii=False), "json", theme="monokai", background_color="default")
-        except Exception:
-            # Wrap in Text to prevent Rich from parsing raw strings as markup
-            display_content = Text(result)
-
-        panel = Panel(
-            display_content,
-            title="📥 [bold cyan]Tool Output[/bold cyan]",
-            border_style="cyan",
-            expand=False
-        )
-        console.print(panel)
 
     def on_error(self, message: str):
         self._stop_status()
@@ -91,9 +129,6 @@ class ConsoleAgentListener(AgentListener):
 
     def on_complete(self):
         self._stop_status()
-        console.print()
-        console.print(Align.center("[bold green]🏁 Task Completed Successfully![/bold green]"))
-        console.print()
 
 
 def run_cli():

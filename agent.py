@@ -22,7 +22,7 @@ class AgentListener:
     def on_step_start(self, step: int, max_steps: int):
         pass
 
-    def on_thought(self, thought: str):
+    def on_thought(self, thought: str, is_final: bool = False):
         pass
 
     def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
@@ -136,7 +136,13 @@ class Agent:
 
             if response_msg.content:
                 if self.listener:
-                    self.listener.on_thought(response_msg.content)
+                    is_final = not bool(response_msg.tool_calls)
+                    import inspect
+                    sig = inspect.signature(self.listener.on_thought)
+                    if "is_final" in sig.parameters:
+                        self.listener.on_thought(response_msg.content, is_final=is_final)
+                    else:
+                        self.listener.on_thought(response_msg.content)
             
             self.history.append(response_msg)
 
