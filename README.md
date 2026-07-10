@@ -325,6 +325,33 @@ O agente persiste seu histórico em um **banco SQLite local com índice FTS5** (
 
 > 📌 O *system prompt* inclui um bloco "Memory & Source of Truth Constraints" informando ao modelo que a memória é histórica e que os arquivos físicos são a fonte da verdade definitiva.
 
+## 🕸️ Frontend do Grafo de Memória (`front/`)
+
+O projeto inclui um **visualizador web do grafo de conhecimento** persistente (`.agents/memory/memory_graph.jsonl`). Ele faz parte do projeto e **sobe automaticamente junto com o agente** — não é necessário rodar `python -m http.server` manualmente.
+
+- **Local:** `front/index.html` (Bootstrap 5 + vis-network via CDN) e `front/server.py` (servidor HTTP leve, somente stdlib).
+- **Como funciona:** ao iniciar o `run_cli()`, um servidor HTTP em *background* (thread daemon) é lançado, servindo o `index.html` e expondo o grafo em `/api/memory.jsonl`. O navegador abre automaticamente em uma nova aba.
+- **Recursos:** grafo interativo (nós = entidades, arestas = relações, colorido por `entityType`), busca, filtro por tipo, lista lateral de entidades/relações e contadores. As observações de cada entidade aparecem como *tooltip* e na lista.
+- **Sem CORS/`file:// issues:** o endpoint `/api/memory.jsonl` lê o artefato diretamente do disco (caminho resolvido a partir da raiz do projeto) e envia `Access-Control-Allow-Origin: *`, então o frontend sempre carrega o grafo vivo.
+
+### Opções de CLI
+
+| Flag | Padrão | Descrição |
+|------|--------|-----------|
+| `--front-host` | `127.0.0.1` | Host de bind do servidor do frontend |
+| `--front-port` | `8090` | Porta de bind do servidor do frontend |
+| `--no-front` | — | Não inicia o servidor do frontend |
+
+### Executar o servidor sozinho (opcional)
+
+```bash
+# Na raiz do projeto
+python front/server.py --port 8090
+# Abra http://127.0.0.1:8090/
+```
+
+> 💡 O servidor é *threading* e *daemon*: ao encerrar o processo do agente (Ctrl+C), ele é finalizado junto. Se a porta estiver ocupada, o bind falha silenciosamente e o agente continua normalmente (o aviso é exibido no terminal).
+
 ## 🛠️ Provedores Suportados
 
 A factory `get_provider()` (em `providers/__init__.py`) mapeia os nomes abaixo para as respectivas implementações no pacote `providers/`:
@@ -578,6 +605,7 @@ Corpo detalhado das diretrizes (carregado sob demanda via load_skill).
 │   ├── math_tools.py    # Cálculo matemático (calculate)
 │   └── multi_agent.py   # Orquestração de subagentes (spawn_subagents_parallel + CollectingAgentListener)
 ├── tests/               # Testes automatizados (pytest)
+├── front/               # Frontend do grafo de memória (index.html + server.py, sobe com o projeto)
 └── uv.lock              # Dependências travadas (lock)
 ```
 

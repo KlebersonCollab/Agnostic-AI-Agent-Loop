@@ -25,6 +25,11 @@
 {"type":"entity","name":"Agent Memory","entityType":"Feature","observations":["Persistência SQLite FTS5 de sessões","search_memory busca por keyword/categoria (task, thought, tool_output, summary, handover)"]}
 {"type":"entity","name":"Handover Checkpoint","entityType":"Feature","observations":["checkpoint.json salvo no penúltimo passo quando max_steps atingido","cli.py detecta e oferece retomada em modo interativo","Removido automaticamente em conclusão bem-sucedida"]}
 {"type":"entity","name":"Dynamic Skills/Rules","entityType":"Feature","observations":["Rules (.agents/rules/*.md) ativas por padrão, sempre injetadas","Skills (.agents/skills/*/SKILL.md) carregadas sob demanda via load_skill","DESIGN.md injetado só quando histórico tem keywords de design/frontend"]}
+{"type":"entity","name":"front/","entityType":"Package","observations":["Frontend do grafo de conhecimento persistente (memory_graph.jsonl)","index.html: Bootstrap 5 + vis-network (CDN); grafo interativo, busca, filtro por tipo","server.py: servidor HTTP leve (somente stdlib) que sobe em background com o agente","Expõe /api/memory.jsonl lendo .agents/memory/memory_graph.jsonl do disco (CORS *)","Iniciado automaticamente em run_cli() via thread daemon; flags --front-host/--front-port/--no-front"]}
+{"type":"entity","name":"Memory Graph Frontend","entityType":"Feature","observations":["Visualizador web do grafo de memória; parte do projeto, sobe junto do agente","Nós=entidades, arestas=relações, colorido por entityType","Auto-abre navegador; fallback de seleção de arquivo manual","Sem necessidade de python -m http.server manual"]}
+{"type":"relation","from":"agnostic-agent","to":"front/","relationType":"CONTAINS"}
+{"type":"relation","from":"front/","to":"Memory Graph Frontend","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"cli.py","to":"Memory Graph Frontend","relationType":"STARTS"}
 {"type":"relation","from":"agnostic-agent","to":"main.py","relationType":"CONTAINS"}
 {"type":"relation","from":"agnostic-agent","to":"cli.py","relationType":"CONTAINS"}
 {"type":"relation","from":"agnostic-agent","to":"agent.py","relationType":"CONTAINS"}

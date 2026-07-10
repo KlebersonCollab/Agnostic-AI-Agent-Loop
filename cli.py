@@ -201,8 +201,45 @@ def run_cli():
         default=200,
         help="Maximum loop iterations/steps"
     )
+    parser.add_argument(
+        "--front-host",
+        type=str,
+        default="127.0.0.1",
+        help="Host for the Memory Graph frontend server (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--front-port",
+        type=int,
+        default=8090,
+        help="Port for the Memory Graph frontend server (default: 8090)"
+    )
+    parser.add_argument(
+        "--no-front",
+        action="store_true",
+        help="Do not start the Memory Graph frontend server"
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open a browser tab for the Memory Graph frontend"
+    )
 
     args = parser.parse_args()
+
+    # Start the Memory Graph frontend server (part of the project, runs alongside the agent)
+    if not args.no_front:
+        try:
+            from front.server import start_server
+            _front_server, _front_port = start_server(
+                host=args.front_host,
+                port=args.front_port,
+                open_browser=not args.no_browser,
+            )
+            console.print(
+                f"[dim]🧠 Memory Graph frontend: http://{args.front_host}:{_front_port}/[/dim]"
+            )
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Could not start Memory Graph frontend: {e}[/yellow]")
 
     # Discover skills and rules at startup
     builder = ContextBuilder(
