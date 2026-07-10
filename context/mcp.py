@@ -193,6 +193,16 @@ class MCPManager:
         for name in active_names:
             self.unload_mcp(name)
 
+        # Clear references to allow garbage collection while loop is active
+        self.active_clients.clear()
+        self.tools_metadata.clear()
+        self.loaded_tools.clear()
+
+        # Force garbage collection to run deallocators (like StdioTransport.__del__)
+        # while the event loop is still running.
+        import gc
+        gc.collect()
+
         # Safely shut down background loop and thread
         if hasattr(self, "loop") and self.loop.is_running():
             self.loop.call_soon_threadsafe(self.loop.stop)
