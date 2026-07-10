@@ -120,18 +120,19 @@ class ConsoleAgentListener(AgentListener):
         self._stop_status()
         formatted = self._format_tool_call(name, arguments)
         self.current_tool_call_formatted = formatted
-        self.status = console.status(f"[bold yellow]●[/bold yellow] {formatted}...", spinner="dots")
-        self.status.start()
+        console.print(f"[bold yellow]●[/bold yellow] [yellow]{formatted}...[/yellow]", end="\r")
 
     def on_tool_output(self, name: str, result: str):
         self._stop_status()
         formatted = getattr(self, "current_tool_call_formatted", None) or f"{name}(...)"
         
         is_error = result.strip().startswith("Error") or result.strip().startswith("Warning")
-        color = "red" if is_error else "green"
-        status_suffix = " [red](failed)[/red]" if is_error else ""
-        
-        console.print(f"[bold {color}]●[/bold {color}] {formatted}{status_suffix}")
+        if is_error:
+            # Overwrite the carriage return with red bullet and red text, then a newline
+            console.print(f"[bold red]●[/bold red] [red]{formatted} (failed)[/red]                       ")
+        else:
+            # Overwrite the carriage return with green bullet and default text, then a newline
+            console.print(f"[bold green]●[/bold green] {formatted}                            ")
         self.current_tool_call_formatted = None
 
     def on_error(self, message: str):
