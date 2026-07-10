@@ -49,7 +49,7 @@ class ConsoleAgentListener(AgentListener):
         import os
         import json
         
-        suffix = " (ctrl+o to expand)" if not self.verbose else ""
+        suffix = " (/verbose to expand)" if not self.verbose else ""
         
         if name == "list_project_files":
             path = os.path.abspath(arguments.get("path") or ".")
