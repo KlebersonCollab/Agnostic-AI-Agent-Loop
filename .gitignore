@@ -19,3 +19,8 @@ checkpoint.json.old
 # Local memory database
 .agents/memory.db
 
+.playwright-mcp/
+.playwright-mcp/*.*
+
+.pytest_cache/
+.pytest_cache/*.*

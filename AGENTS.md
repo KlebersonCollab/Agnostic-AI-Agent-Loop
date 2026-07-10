@@ -20,6 +20,7 @@ The objective is to enforce a **Spec Driven Development (SDD)** lifecycle and pr
 3. **If ANY placeholder is empty or contains `<!-- PREENCHER ...` text** → TRIGGER AUTO-DISCOVERY (Step A below)
 4. **If ALL sections are filled** → proceed with development
 5. **ALWAYS** prefer using subagents.
+6. **ALWAYS** use mcp tools to navigate in internet
 
 ---
 
