@@ -282,7 +282,7 @@ def run_cli():
 
             try:
                 console.print()
-                user_input = console.input("[bold magenta]Agy (or '/exit', '/clear') > [/bold magenta]").strip()
+                user_input = console.input("[bold magenta]Agnostic (or '/context', '/clear', '/exit') > [/bold magenta]").strip()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[bold red]Exiting.[/bold red]")
                 break
