@@ -123,7 +123,9 @@ class ConsoleAgentListener(AgentListener):
         self._stop_status()
         formatted = self._format_tool_call(name, arguments)
         self.current_tool_call_formatted = formatted
-        console.print(f"[bold yellow]●[/bold yellow] [yellow]{formatted}...[/yellow]", end="\r")
+        console.print(f"[bold yellow]● {formatted}...[/bold yellow]", end="\r")
+        import sys
+        sys.stdout.flush()
 
     def on_tool_output(self, name: str, result: str):
         self._stop_status()
@@ -131,11 +133,11 @@ class ConsoleAgentListener(AgentListener):
         
         is_error = result.strip().startswith("Error") or result.strip().startswith("Warning")
         if is_error:
-            # Overwrite the carriage return with red bullet and red text, then a newline
-            console.print(f"[bold red]●[/bold red] [red]{formatted} (failed)[/red]                       ")
+            # Overwrite carriage return with bold red line, then newline
+            console.print(f"[bold red]● {formatted} (failed)[/bold red]                       ")
         else:
-            # Overwrite the carriage return with green bullet and default text, then a newline
-            console.print(f"[bold green]●[/bold green] {formatted}                            ")
+            # Overwrite carriage return with bold green line, then newline
+            console.print(f"[bold green]● {formatted}[/bold green]                            ")
         self.current_tool_call_formatted = None
         
         if self.verbose:
