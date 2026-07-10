@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Memory Graph</title>
+
+  <!-- Bootstrap 5 (CDN) -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+    crossorigin="anonymous"
+  />
+  <style>
+    html, body { height: 100%; }
+    #graph { width: 100%; height: 70vh; border: 1px solid var(--bs-border-color); border-radius: .5rem; background: #0f1011; }
+    .entity-card { cursor: pointer; }
+    .entity-card:hover { border-color: #5e6ad2; }
+    .obs-item { font-size: .8rem; color: var(--bs-secondary-color); }
+    .type-badge { font-size: .7rem; }
+    .stat-num { font-size: 1.6rem; font-weight: 600; }
+    #status { min-height: 1.5rem; }
+    .vis-tooltip {
+      background-color: #141516 !important;
+      color: #f7f8f8 !important;
+      border: 1px solid #34343a !important;
+      border-radius: 6px !important;
+      font-family: monospace !important;
+      white-space: pre-line !important;
+    }
+  </style>
+</head>
+<body class="bg-body-tertiary">
+  <nav class="navbar navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">🧠 Agent Memory Graph</span>
+      <span class="text-secondary small">agnostic-agent · knowledge graph viewer</span>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-3">
+    <!-- Stats -->
+    <div class="row g-2 mb-3">
+      <div class="col-4 col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+          <div class="stat-num" id="stat-entities">0</div>
+          <div class="text-secondary small">Entidades</div>
+        </div></div>
+      </div>
+      <div class="col-4 col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+          <div class="stat-num" id="stat-relations">0</div>
+          <div class="text-secondary small">Relações</div>
+        </div></div>
+      </div>
+      <div class="col-4 col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+          <div class="stat-num" id="stat-observations">0</div>
+          <div class="text-secondary small">Observações</div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Carregar arquivo (.jsonl)</label>
+        <input type="file" id="file-input" class="form-control form-control-sm" accept=".jsonl,.json,.txt" />
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Buscar (nome/tipo)</label>
+        <input type="text" id="search-input" class="form-control form-control-sm" placeholder="ex.: agent, Pattern, Provider..." />
+      </div>
+      <div class="col-8 col-md-3">
+        <label class="form-label small mb-1">Filtrar por tipo</label>
+        <select id="type-filter" class="form-select form-select-sm">
+          <option value="">Todos os tipos</option>
+        </select>
+      </div>
+      <div class="col-4 col-md-1 d-grid">
+        <button id="reset-btn" class="btn btn-sm btn-outline-secondary">Reset</button>
+      </div>
+    </div>
+    <div id="status" class="small text-secondary mb-2"></div>
+
+    <!-- Graph -->
+    <div id="graph"></div>
+
+    <!-- Lists -->
+    <div class="row mt-3 g-3">
+      <div class="col-12 col-lg-6">
+        <h6 class="text-secondary">Entidades</h6>
+        <div id="entity-list" class="d-flex flex-column gap-2"></div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <h6 class="text-secondary">Relações</h6>
+        <div id="relation-list" class="d-flex flex-column gap-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+    crossorigin="anonymous"
+  ></script>
+  <!-- vis-network (graph plotting) -->
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+
+  <script>
+    "use strict";
+
+    // ---- Palette for entity types ----
+    const TYPE_COLORS = {
+      Project:   "#5e6ad2",
+      Module:    "#27a644",
+      Package:   "#828fff",
+      TechStack: "#d0d6e0",
+      Integration:"#7a7fad",
+      Pattern:   "#e0a458",
+      Feature:   "#5ec8d8",
+    };
+    const FALLBACK_COLOR = "#8a8f98";
+
+    let ALL = { entities: [], relations: [], observations: [] };
+    let network = null;
+    let container = null;
+
+    // ---- JSONL parsing ----
+    function parseJSONL(text) {
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const entities = [], relations = [], observations = [];
+      for (const line of lines) {
+        let obj;
+        try { obj = JSON.parse(line); }
+        catch (e) { console.warn("Linha ignorada (JSON inválido):", line); continue; }
+        if (!obj || typeof obj !== "object" || !obj.type) continue;
+        if (obj.type === "entity") entities.push(obj);
+        else if (obj.type === "relation") relations.push(obj);
+        else if (obj.type === "observation") observations.push(obj);
+      }
+      // Merge observations into their entities
+      const byName = new Map(entities.map(e => [e.name, e]));
+      for (const obs of observations) {
+        const ent = byName.get(obs.entityName);
+        if (ent) {
+          ent.observations = (ent.observations || []).concat(obs.contents || []);
+        }
+      }
+      return { entities, relations, observations };
+    }
+
+    // ---- Build vis-network datasets ----
+    function buildDatasets(entities, relations) {
+      const nodes = entities.map(e => {
+        const color = TYPE_COLORS[e.entityType] || FALLBACK_COLOR;
+        const obs = (e.observations || []).join("\n");
+        return {
+          id: e.name,
+          label: e.name,
+          group: e.entityType,
+          title: (e.entityType ? "[" + e.entityType + "]\n" : "") + (obs || e.name),
+          color: { background: color, border: color, highlight: { background: "#fff", border: color } },
+          font: { color: "#f7f8f8" },
+        };
+      });
+      const edges = relations.map(r => ({
+        from: r.from,
+        to: r.to,
+        label: r.relationType,
+        arrows: "to",
+        font: { color: "#8a8f98", size: 10, strokeWidth: 0, background: "none" },
+        color: { color: "#34343a", highlight: "#5e6ad2" },
+        smooth: { type: "cubicBezier", roundness: 0.4 },
+      }));
+      return {
+        nodes: new vis.DataSet(nodes),
+        edges: new vis.DataSet(edges),
+      };
+    }
+
+    // ---- Render graph ----
+    function renderGraph(entities, relations) {
+      const { nodes, edges } = buildDatasets(entities, relations);
+      const data = { nodes, edges };
+      const options = {
+        nodes: { shape: "dot", size: 14, borderWidth: 2 },
+        edges: { width: 1.5 },
+        groups: Object.fromEntries(
+          Object.entries(TYPE_COLORS).map(([k, v]) => [k, { color: { background: v, border: v }, font: { color: "#f7f8f8" } }])
+        ),
+        physics: {
+          stabilization: { iterations: 200 },
+          barnesHut: { gravitationalConstant: -12000, springLength: 120, springConstant: 0.04 },
+        },
+        interaction: { hover: true, tooltipDelay: 120, navigationButtons: true, keyboard: false },
+      };
+      if (!network) {
+        network = new vis.Network(container, data, options);
+      } else {
+        network.setData(data);
+        network.setOptions(options);
+      }
+    }
+
+    // ---- Render side lists ----
+    function renderLists(entities, relations) {
+      const el = document.getElementById("entity-list");
+      el.innerHTML = "";
+      for (const e of entities) {
+        const card = document.createElement("div");
+        card.className = "card entity-card";
+        const obsHtml = (e.observations || []).map(o => `<div class="obs-item">• ${escapeHtml(o)}</div>`).join("");
+        card.innerHTML = `
+          <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">${escapeHtml(e.name)}</span>
+              <span class="badge type-badge text-bg-secondary">${escapeHtml(e.entityType || "?")}</span>
+            </div>
+            ${obsHtml}
+          </div>`;
+        card.addEventListener("click", () => focusNode(e.name));
+        el.appendChild(card);
+      }
+
+      const rl = document.getElementById("relation-list");
+      rl.innerHTML = "";
+      for (const r of relations) {
+        const item = document.createElement("div");
+        item.className = "small";
+        item.innerHTML = `<span class="text-info">${escapeHtml(r.from)}</span> <span class="text-secondary">—${escapeHtml(r.relationType)}→</span> <span class="text-warning">${escapeHtml(r.to)}</span>`;
+        rl.appendChild(item);
+      }
+    }
+
+    function focusNode(name) {
+      if (network && network.body.data.nodes.get(name)) {
+        network.selectNodes([name]);
+        network.focus(name, { scale: 1.1, animation: true });
+      }
+    }
+
+    // ---- Stats + type filter ----
+    function updateStats() {
+      document.getElementById("stat-entities").textContent = ALL.entities.length;
+      document.getElementById("stat-relations").textContent = ALL.relations.length;
+      document.getElementById("stat-observations").textContent = ALL.observations.length;
+
+      const sel = document.getElementById("type-filter");
+      const current = sel.value;
+      const types = [...new Set(ALL.entities.map(e => e.entityType).filter(Boolean))].sort();
+      sel.innerHTML = '<option value="">Todos os tipos</option>' +
+        types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+      if (types.includes(current)) sel.value = current;
+    }
+
+    // ---- Apply search + type filter ----
+    function applyFilters() {
+      const q = document.getElementById("search-input").value.trim().toLowerCase();
+      const type = document.getElementById("type-filter").value;
+      const ents = ALL.entities.filter(e => {
+        const matchType = !type || e.entityType === type;
+        const matchQ = !q ||
+          (e.name || "").toLowerCase().includes(q) ||
+          (e.entityType || "").toLowerCase().includes(q) ||
+          (e.observations || []).some(o => o.toLowerCase().includes(q));
+        return matchType && matchQ;
+      });
+      const names = new Set(ents.map(e => e.name));
+      const rels = ALL.relations.filter(r => names.has(r.from) && names.has(r.to));
+      renderGraph(ents, rels);
+      renderLists(ents, rels);
+    }
+
+    // ---- Load + display ----
+    function loadData(text, sourceLabel) {
+      try {
+        ALL = parseJSONL(text);
+        updateStats();
+        applyFilters();
+        setStatus(`Carregado de ${sourceLabel}: ${ALL.entities.length} entidades, ${ALL.relations.length} relações, ${ALL.observations.length} observações.`, "ok");
+      } catch (err) {
+        setStatus("Erro ao processar o arquivo: " + err.message, "err");
+        console.error(err);
+      }
+    }
+
+    function setStatus(msg, kind) {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "small " + (kind === "err" ? "text-danger" : "text-secondary");
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    // ---- Wire up events ----
+    document.getElementById("file-input").addEventListener("change", (ev) => {
+      const file = ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => loadData(reader.result, file.name);
+      reader.onerror = () => setStatus("Falha ao ler o arquivo.", "err");
+      reader.readAsText(file);
+    });
+    document.getElementById("search-input").addEventListener("input", applyFilters);
+    document.getElementById("type-filter").addEventListener("change", applyFilters);
+    document.getElementById("reset-btn").addEventListener("click", () => {
+      document.getElementById("search-input").value = "";
+      document.getElementById("type-filter").value = "";
+      applyFilters();
+    });
+
+    // ---- Auto-load from the server endpoint (started with the project) ----
+    container = document.getElementById("graph");
+    (async function autoLoad() {
+      try {
+        const res = await fetch("/api/memory.jsonl", { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        loadData(text, "/api/memory.jsonl");
+      } catch (e) {
+        setStatus("Auto-carregamento falhou. O servidor do frontend pode não estar rodando. Use o seletor de arquivo acima para carregar o memory_graph.jsonl manualmente.", "err");
+      }
+    })();
+  </script>
+</body>
+</html>
