@@ -17,10 +17,11 @@ The objective is to enforce a **Spec Driven Development (SDD)** lifecycle and pr
 
 1. Read ``.specs/project/CONTEXT.md`` — understand the project
 2. Read `.specs/knowledge/<type>s/<slug>.md` — check for known patterns
-3. **If ANY placeholder is empty or contains `<!-- PREENCHER ...` text** → TRIGGER AUTO-DISCOVERY (Step A below)
-4. **If ALL sections are filled** → proceed with development
-5. **ALWAYS** prefer using subagents.
-6. **ALWAYS** use mcp tools to navigate in internet
+3. Load persistent **memory** via the `sdd-memory` skill to reconstruct prior session state (reads `.agents/memory/memory_graph.jsonl`). This is the agent's long-term recall — consult it BEFORE re-discovering known facts, architecture, or user preferences.
+4. **If ANY placeholder is empty or contains `<!-- PREENCHER ...` text** → TRIGGER AUTO-DISCOVERY (Step A below)
+5. **If ALL sections are filled** → proceed with development
+6. **ALWAYS** prefer using subagents.
+7. **ALWAYS** use mcp tools to navigate in internet
 
 ---
 
@@ -284,6 +285,42 @@ sdd-planner
 
 ---
 
+# Memory Management (sdd-memory)
+
+The agent has a persistent long-term memory stored as a knowledge graph at
+`.agents/memory/memory_graph.jsonl` (entities, relations, observations). It is managed
+exclusively through the `sdd-memory` skill. This memory is the agent's recall across
+sessions and MUST be used to avoid re-discovering known facts.
+
+## When to LOAD memory (sdd-memory)
+- **At the START of every session** (see Blocking Gate step 3) — reconstruct project state,
+  architecture, conventions, and user preferences before any discovery or planning.
+- **Before any research/exploration task** — check whether the fact, module, or pattern is
+  already recorded, so you don't re-derive it.
+- **Before planning or execution** — confirm the current architecture/decisions match what
+  was previously persisted (memory is historical; physical files are the source of truth).
+
+## When to WRITE/UPDATE memory (sdd-memory)
+- **At the END of every interaction** if new insights were uncovered: new modules, integrations,
+  design patterns, tech-stack changes, user preferences, decisions, or blockers.
+- **After completing a feature/refactor** — record the resulting architecture and key relations.
+- **When a decision is made** (e.g., chosen approach, deferred idea) — persist it as an
+  observation so future sessions don't relitigate it.
+- **Never** persist secrets, API keys, or contents of `.env`/`.agents/memory.db`.
+
+### Responsibilities
+- Reconstruct prior state from `.agents/memory/memory_graph.jsonl` (read-only).
+- Persist new entities/relations/observations as JSONL lines (append, no duplicates).
+- Keep the graph consistent with the physical codebase (files are the source of truth).
+
+### Forbidden
+- Calling non-existent graph tools (`create_entities`, etc.) — the skill defines the JSONL
+  artifact format; follow it exactly.
+- Skipping memory load at session start (leads to redundant discovery).
+- Writing memory that contradicts current files without noting the discrepancy.
+
+---
+
 # Complete Lifecycle
 
 ## Knowledge / Exploration
@@ -355,6 +392,7 @@ Request
 # Priority Order
 
 ```text
+0. sdd-memory (load at session start; write at session end)
 1. sdd-explorer
 2. sdd-planner
 3. sdd-executor
@@ -364,6 +402,11 @@ Request
 Agent behavior must always preserve this order whenever applicable.
 
 ## Knowledge Base
+
+> **Distinction**: The **Knowledge Base** below (`.specs/knowledge/`) is curated, human-reviewable
+> documentation of reusable patterns/anti-patterns. The **persistent memory** (`.agents/memory/memory_graph.jsonl`,
+> managed by `sdd-memory`) is the agent's automatic cross-session recall of project state, architecture,
+> and user context. Both coexist: memory feeds discovery; knowledge base captures durable guidance.
 
 - Patterns go to `.specs/knowledge/patterns/`
 - anti-patterns to `.specs/knowledge/anti-patterns/`.

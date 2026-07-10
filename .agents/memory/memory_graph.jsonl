@@ -1,0 +1,56 @@
+{"type":"entity","name":"agnostic-agent","entityType":"Project","observations":["Nome: agnostic-agent (versão 0.2.1)","Framework de agente de IA autônomo e agnóstico a provedores","Loop ReAct (Reasoning + Action) que coordena LLM, skills, rules e ferramentas","Executado localmente via CLI (entry-point: agnostic-agent = cli:run_cli)","Idioma: Python 3.14+; build via hatchling; gerenciador uv"]}
+{"type":"entity","name":"main.py","entityType":"Module","observations":["Ponto de entrada fino; apenas invoca run_cli() de cli.py"]}
+{"type":"entity","name":"cli.py","entityType":"Module","observations":["Parsing de argumentos via argparse (flags opcionais, sem subcomandos)","ConsoleAgentListener (saída Rich colorida)","Comandos interativos: /context, /verbose, /clear, /exit","Detecção e retomada de checkpoint.json (handover)","Orquestração da sessão e bootstrap do provider"]}
+{"type":"entity","name":"agent.py","entityType":"Module","observations":["Loop principal ReAct do Agent","Classe base AgentListener (métodos no-op, não ABC)","SYSTEM_PROMPT definido aqui","Intercepta ferramentas especiais: load_skill/unload_skill, load_mcp/unload_mcp/load_mcp_tool/unload_mcp_tool, search_memory","Mecanismo de handover de emergência no penúltimo passo (tools=None)"]}
+{"type":"entity","name":"context/","entityType":"Package","observations":["Pacote de contexto dinâmico do prompt","builder.py: ContextBuilder compila system prompt (skills/rules/AGENTS.md/DESIGN.md)","references.py: resolve @file/@url/@diff/@staged no prompt do usuário","breakdown.py: calcula estimativa de uso de tokens da janela de contexto","mcp.py: MCPManager cliente MCP via subprocesso stdio (fastmcp)"]}
+{"type":"entity","name":"providers/","entityType":"Package","observations":["Abstração de provedores LLM","base.py: BaseLLMProvider (ABC), modelos Pydantic (MessageRole, ToolCall, ChatMessage, ToolDefinition), retry_with_backoff","openai.py: OpenAIProvider, OpenAICompatibleProvider, OpenRouterProvider","gemini.py: GeminiProvider","anthropic.py: AnthropicProvider","__init__.py: factory get_provider()"]}
+{"type":"entity","name":"tools/","entityType":"Package","observations":["Ferramentas do agente","io_tools.py: list_project_files, read_file, write_file, patch_file, search_grep, get_outline","math_tools.py: calculate","multi_agent.py: spawn_subagents_parallel + CollectingAgentListener","__init__.py: REGISTERED_TOOLS (fonte única), TOOLS_METADATA, TOOLS_MAP, set_active_provider"]}
+{"type":"entity","name":"memory.py","entityType":"Module","observations":["AgentMemory: banco SQLite local com índice FTS5","Persiste histórico de sessões, pensamentos, ferramentas e handovers","Recuperação semântica via search_memory (tokenizador porter, BM25)","Banco em .agents/memory.db (gitignored)"]}
+{"type":"entity","name":"Python 3.14","entityType":"TechStack","observations":["requires-python >=3.14",".python-version = 3.14"]}
+{"type":"entity","name":"uv","entityType":"TechStack","observations":["Gerenciador de dependências/ambiente (uv.lock presente)","Comandos: uv sync, uv run pytest, uv tool install ."]}
+{"type":"entity","name":"pytest","entityType":"TechStack","observations":["Framework de testes (>=9.1.1)","Suíte em tests/ cobre agent, tools, context, providers, mcp, memory","Benchmark real pulado sem OPENROUTER_API_KEY"]}
+{"type":"entity","name":"fastmcp","entityType":"TechStack","observations":["Cliente de alto nível para Model Context Protocol (MCP); usado pelo MCPManager"]}
+{"type":"entity","name":"rich","entityType":"TechStack","observations":["UI de terminal (painéis, markdown, syntax highlight, tabelas coloridas)"]}
+{"type":"entity","name":"pydantic","entityType":"TechStack","observations":["Modelos de dados compartilhados (ChatMessage, ToolCall, ToolDefinition, MessageRole)"]}
+{"type":"entity","name":"LLM Providers","entityType":"Integration","observations":["OpenAI, Gemini, Anthropic, OpenRouter, OpenAI-compatible (Ollama, Groq, DeepSeek)","Acessados via factory get_provider()"]}
+{"type":"entity","name":"MCP Integration","entityType":"Integration","observations":["Servidores MCP stdio declarados em .agents/mcp/*.json","Carregados sob demanda via load_mcp/load_mcp_tool"]}
+{"type":"entity","name":"Pattern: Observer/Listener","entityType":"Pattern","observations":["AgentListener desacopla lógica da apresentação","Implementações: ConsoleAgentListener (cli.py), CollectingAgentListener (tools/multi_agent.py)"]}
+{"type":"entity","name":"Pattern: Factory","entityType":"Pattern","observations":["get_provider() mapeia nome -> BaseLLMProvider concreto"]}
+{"type":"entity","name":"Pattern: Strategy/Abstraction","entityType":"Pattern","observations":["BaseLLMProvider define contrato; subclasses implementam _generate()","generate() adiciona retry/backoff"]}
+{"type":"entity","name":"Pattern: Registry","entityType":"Pattern","observations":["REGISTERED_TOOLS é fonte única de verdade (lista de tuplas ToolDefinition, handler)","TOOLS_METADATA e TOOLS_MAP derivados no import","Validação em import-time: nomes duplicados -> ImportError"]}
+{"type":"entity","name":"Pattern: Dynamic Context Compilation","entityType":"Pattern","observations":["ContextBuilder.build_prompt() recompila system prompt a cada passo (rules ativas + skill metadata + skill bodies)"]}
+{"type":"entity","name":"Pattern: Tool Interception","entityType":"Pattern","observations":["load_skill/unload_skill/search_memory e ferramentas MCP aparecem em TOOLS_METADATA mas são interceptadas pelo Agent","Delegadas a ContextBuilder/AgentMemory/MCPManager; handlers lambda stub nunca invocados"]}
+{"type":"entity","name":"Pattern: Parallel Orchestration","entityType":"Pattern","observations":["spawn_subagents_parallel usa ThreadPoolExecutor","Subagentes reusam provider ativo; spawn_subagents_parallel excluída do toolset para evitar recursão"]}
+{"type":"entity","name":"Context References","entityType":"Feature","observations":["@file (com range de linhas), @url, @diff, @staged expandidos inline","@folder e @git parseados mas não expandidos","Segurança: bloqueia paths fora do CWD e arquivos sensíveis (.env, .ssh)"]}
+{"type":"entity","name":"Agent Memory","entityType":"Feature","observations":["Persistência SQLite FTS5 de sessões","search_memory busca por keyword/categoria (task, thought, tool_output, summary, handover)"]}
+{"type":"entity","name":"Handover Checkpoint","entityType":"Feature","observations":["checkpoint.json salvo no penúltimo passo quando max_steps atingido","cli.py detecta e oferece retomada em modo interativo","Removido automaticamente em conclusão bem-sucedida"]}
+{"type":"entity","name":"Dynamic Skills/Rules","entityType":"Feature","observations":["Rules (.agents/rules/*.md) ativas por padrão, sempre injetadas","Skills (.agents/skills/*/SKILL.md) carregadas sob demanda via load_skill","DESIGN.md injetado só quando histórico tem keywords de design/frontend"]}
+{"type":"relation","from":"agnostic-agent","to":"main.py","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"cli.py","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"agent.py","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"context/","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"providers/","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"tools/","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"memory.py","relationType":"CONTAINS"}
+{"type":"relation","from":"agnostic-agent","to":"Python 3.14","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"uv","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"pytest","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"fastmcp","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"rich","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"pydantic","relationType":"USES"}
+{"type":"relation","from":"agnostic-agent","to":"LLM Providers","relationType":"INTEGRATES_WITH"}
+{"type":"relation","from":"agnostic-agent","to":"MCP Integration","relationType":"INTEGRATES_WITH"}
+{"type":"relation","from":"providers/","to":"LLM Providers","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"context/","to":"MCP Integration","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"tools/","to":"Pattern: Registry","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"agent.py","to":"Pattern: Observer/Listener","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"cli.py","to":"Pattern: Observer/Listener","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"tools/","to":"Pattern: Parallel Orchestration","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"context/","to":"Context References","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"memory.py","to":"Agent Memory","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"agent.py","to":"Handover Checkpoint","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"context/","to":"Dynamic Skills/Rules","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"providers/","to":"Pattern: Factory","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"providers/","to":"Pattern: Strategy/Abstraction","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"context/","to":"Pattern: Dynamic Context Compilation","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"agent.py","to":"Pattern: Tool Interception","relationType":"IMPLEMENTS"}
