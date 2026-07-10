@@ -20,11 +20,12 @@ class ContextBuilder:
             if rules_dir:
                 self.rules_dirs.append(rules_dir)
         else:
-            # Package root directory (where context_builder.py is located)
+            # Package root directory (where context/builder.py is located)
             package_root = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(package_root)
             
             # 1. Package builtin dirs
-            builtin_agents = os.path.join(package_root, ".agents")
+            builtin_agents = os.path.join(project_root, ".agents")
             if os.path.exists(builtin_agents):
                 builtin_skills = os.path.join(builtin_agents, "skills")
                 builtin_rules = os.path.join(builtin_agents, "rules")
