@@ -64,6 +64,8 @@ class Agent:
         self.context_builder = ContextBuilder(
             base_system_prompt=system_prompt
         )
+        from context.mcp import MCPManager
+        self.mcp_manager = MCPManager(agent=self)
         
         self.history: List[ChatMessage] = [
             ChatMessage(role=MessageRole.SYSTEM, content=self.context_builder.build_prompt())
@@ -72,6 +74,12 @@ class Agent:
         self.handover_checkpoint: Optional[str] = None
 
     def run(self, user_prompt: str):
+        try:
+            self._run_internal(user_prompt)
+        finally:
+            self.mcp_manager.cleanup()
+
+    def _run_internal(self, user_prompt: str):
         # Resolve any context references in the user prompt
         result = preprocess_context_references(user_prompt, cwd=os.getcwd())
         
@@ -199,6 +207,20 @@ class Agent:
                             result = f"Success: Skill '{name}' has been loaded into your system prompt."
                         else:
                             result = f"Error: Skill '{name}' not found."
+                    elif tool_name == "load_mcp":
+                        s_name = tool_args.get("server_name")
+                        result = self.mcp_manager.load_mcp(s_name)
+                    elif tool_name == "unload_mcp":
+                        s_name = tool_args.get("server_name")
+                        result = self.mcp_manager.unload_mcp(s_name)
+                    elif tool_name == "load_mcp_tool":
+                        s_name = tool_args.get("server_name")
+                        t_name = tool_args.get("tool_name")
+                        result = self.mcp_manager.load_mcp_tool(s_name, t_name)
+                    elif tool_name == "unload_mcp_tool":
+                        s_name = tool_args.get("server_name")
+                        t_name = tool_args.get("tool_name")
+                        result = self.mcp_manager.unload_mcp_tool(s_name, t_name)
                     elif tool_name == "unload_skill":
                         name = tool_args.get("name")
                         if self.context_builder.unload_skill(name):
