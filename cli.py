@@ -31,6 +31,7 @@ class ConsoleAgentListener(AgentListener):
     def __init__(self):
         self.status = None
         self.step_start_time = None
+        self.current_tool_call_formatted = None
 
     def _stop_status(self):
         if self.status:
@@ -118,10 +119,20 @@ class ConsoleAgentListener(AgentListener):
     def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
         self._stop_status()
         formatted = self._format_tool_call(name, arguments)
-        console.print(f"[bold dim]●[/bold dim] {formatted}")
+        self.current_tool_call_formatted = formatted
+        self.status = console.status(f"[bold yellow]●[/bold yellow] {formatted}...", spinner="dots")
+        self.status.start()
 
     def on_tool_output(self, name: str, result: str):
         self._stop_status()
+        formatted = getattr(self, "current_tool_call_formatted", None) or f"{name}(...)"
+        
+        is_error = result.strip().startswith("Error") or result.strip().startswith("Warning")
+        color = "red" if is_error else "green"
+        status_suffix = " [red](failed)[/red]" if is_error else ""
+        
+        console.print(f"[bold {color}]●[/bold {color}] {formatted}{status_suffix}")
+        self.current_tool_call_formatted = None
 
     def on_error(self, message: str):
         self._stop_status()
