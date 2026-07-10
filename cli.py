@@ -7,7 +7,7 @@ from typing import Dict, Any
 from providers import get_provider
 from agent import Agent, AgentListener
 from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
-from context_builder import ContextBuilder
+from context.builder import ContextBuilder
 
 from rich.console import Console
 from rich.panel import Panel

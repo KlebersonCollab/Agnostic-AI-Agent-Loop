@@ -59,7 +59,7 @@ class Agent:
         self.max_steps = max_steps
         self.write_checkpoint_file = write_checkpoint_file
         
-        from context_builder import ContextBuilder
+        from context.builder import ContextBuilder
         self.context_builder = ContextBuilder(
             base_system_prompt=system_prompt
         )

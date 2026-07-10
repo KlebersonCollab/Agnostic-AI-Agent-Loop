@@ -1,7 +1,7 @@
 import os
 import shutil
 import pytest
-from context_builder import ContextBuilder
+from context.builder import ContextBuilder
 from providers.base import BaseLLMProvider, ChatMessage, MessageRole, ToolCall
 from agent import Agent
 
