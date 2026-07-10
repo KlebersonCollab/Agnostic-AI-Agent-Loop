@@ -128,4 +128,32 @@ def test_preprocess_token_limits(tmp_path):
     assert not res.expanded
     assert "@ context injection refused" in res.warnings[0]
 
+def test_agent_integration(tmp_path):
+    from providers.base import BaseLLMProvider, ChatMessage, MessageRole
+    from agent import Agent
+    
+    class DummyProvider(BaseLLMProvider):
+        def __init__(self):
+            super().__init__("dummy-model")
+            self.last_messages = None
+        def _generate(self, messages, tools=None, temperature=0.7, max_tokens=None):
+            self.last_messages = messages
+            return ChatMessage(role=MessageRole.ASSISTANT, content="Done")
+
+    provider = DummyProvider()
+    agent = Agent(provider=provider, tools=[], tools_map={})
+    
+    cwd = str(tmp_path)
+    file_path = tmp_path / "info.txt"
+    file_path.write_text("Secret context data")
+    
+    with patch("os.getcwd", return_value=cwd):
+        agent.run("Tell me: @file:info.txt")
+        
+    assert len(agent.history) >= 2
+    user_msg = agent.history[1].content
+    assert "Secret context data" in user_msg
+    assert "### File Reference: info.txt" in user_msg
+
+
 

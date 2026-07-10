@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from providers import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
 from memory import AgentMemory
+from context.references import preprocess_context_references
 
 SYSTEM_PROMPT = """You are a helpful autonomous agent.
 You solve tasks step-by-step.
@@ -71,11 +72,21 @@ class Agent:
         self.handover_checkpoint: Optional[str] = None
 
     def run(self, user_prompt: str):
+        # Resolve any context references in the user prompt
+        result = preprocess_context_references(user_prompt, cwd=os.getcwd())
+        
+        # Notify listener of warnings if present
+        if result.warnings and self.listener:
+            for warning in result.warnings:
+                self.listener.on_error(f"⚠️ Context reference warning: {warning}")
+                
+        final_prompt = result.message
+        
         self.session_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         self.memory = AgentMemory()
         self.memory.create_session(self.session_id, user_prompt)
 
-        self.history.append(ChatMessage(role=MessageRole.USER, content=user_prompt))
+        self.history.append(ChatMessage(role=MessageRole.USER, content=final_prompt))
         self.exit_reason = None
         self.handover_checkpoint = None
 
