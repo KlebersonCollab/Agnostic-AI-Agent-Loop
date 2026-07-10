@@ -32,6 +32,7 @@ class ConsoleAgentListener(AgentListener):
         self.status = None
         self.step_start_time = None
         self.current_tool_call_formatted = None
+        self.verbose = False
 
     def _stop_status(self):
         if self.status:
@@ -48,23 +49,25 @@ class ConsoleAgentListener(AgentListener):
         import os
         import json
         
+        suffix = " (ctrl+o to expand)" if not self.verbose else ""
+        
         if name == "list_project_files":
             path = os.path.abspath(arguments.get("path") or ".")
-            return f"ListDir({path}) (ctrl+o to expand)"
+            return f"ListDir({path}){suffix}"
         elif name == "read_file":
             path = os.path.abspath(arguments.get("filename") or "")
-            return f"Read({path}) (ctrl+o to expand)"
+            return f"Read({path}){suffix}"
         elif name == "write_file":
             path = os.path.abspath(arguments.get("filename") or "")
             if os.path.exists(path):
-                return f"Edit({path}) (ctrl+o to expand)"
-            return f"Create({path}) (ctrl+o to expand)"
+                return f"Edit({path}){suffix}"
+            return f"Create({path}){suffix}"
         elif name == "patch_file" or name == "patch":
             path = os.path.abspath(arguments.get("filename") or "")
-            return f"Edit({path}) (ctrl+o to expand)"
+            return f"Edit({path}){suffix}"
         elif name == "run_command":
             cmd = arguments.get("CommandLine") or ""
-            return f"Bash({cmd}) (ctrl+o to expand)"
+            return f"Bash({cmd}){suffix}"
         elif name == "calculate":
             expr = arguments.get("expression") or ""
             return f"Calc({expr})"
@@ -76,7 +79,7 @@ class ConsoleAgentListener(AgentListener):
             return f"SearchMemory({q})"
         elif name == "spawn_subagents_parallel":
             tasks = arguments.get("tasks") or []
-            return f"Subagents({len(tasks)} tasks) (ctrl+o to expand)"
+            return f"Subagents({len(tasks)} tasks){suffix}"
         elif name == "load_skill":
             sk = arguments.get("name") or ""
             return f"LoadSkill({sk})"
@@ -85,10 +88,10 @@ class ConsoleAgentListener(AgentListener):
             return f"UnloadSkill({sk})"
         elif name == "manage_task":
             tid = arguments.get("TaskId") or ""
-            return f"ManageTask(Task: {tid}) (ctrl+o to expand)"
+            return f"ManageTask(Task: {tid}){suffix}"
         elif name == "schedule":
             prompt = arguments.get("Prompt") or ""
-            return f"Schedule({prompt}) (ctrl+o to expand)"
+            return f"Schedule({prompt}){suffix}"
         else:
             args_str = json.dumps(arguments, ensure_ascii=False)
             return f"{name}({args_str})"
@@ -134,6 +137,21 @@ class ConsoleAgentListener(AgentListener):
             # Overwrite the carriage return with green bullet and default text, then a newline
             console.print(f"[bold green]●[/bold green] {formatted}                            ")
         self.current_tool_call_formatted = None
+        
+        if self.verbose:
+            try:
+                parsed = json.loads(result)
+                display_content = Syntax(json.dumps(parsed, indent=2, ensure_ascii=False), "json", theme="monokai", background_color="default")
+            except Exception:
+                display_content = Text(result)
+
+            panel = Panel(
+                display_content,
+                title="📥 [bold cyan]Tool Output[/bold cyan]",
+                border_style="cyan",
+                expand=False
+            )
+            console.print(panel)
 
     def on_error(self, message: str):
         self._stop_status()
@@ -329,7 +347,7 @@ def run_cli():
 
             try:
                 console.print()
-                user_input = console.input("[bold magenta]Agnostic (or '/context', '/clear', '/exit') > [/bold magenta]").strip()
+                user_input = console.input("[bold magenta]Agnostic (or '/context', '/verbose', '/clear', '/exit') > [/bold magenta]").strip()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[bold red]Exiting.[/bold red]")
                 break
@@ -348,6 +366,12 @@ def run_cli():
                     ChatMessage(role=MessageRole.SYSTEM, content=agent.context_builder.build_prompt())
                 ]
                 console.print("[dim]✓ Conversation history and active context cleared.[/dim]")
+                continue
+
+            if user_input.lower() in ("/verbose", "/outputs", "/v", "verbose", "outputs"):
+                listener.verbose = not listener.verbose
+                status_str = "ENABLED" if listener.verbose else "DISABLED"
+                console.print(f"[dim]✓ Tool output expansion {status_str}.[/dim]")
                 continue
 
             if user_input.lower() in ("/context", "/c", "context"):
