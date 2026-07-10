@@ -11,22 +11,23 @@ main.py
         ├─> set_active_provider(provider)   # shared with subagents
         ├─> ConsoleAgentListener            # Rich terminal UI
         └─> Agent.run(prompt)               # core ReAct loop
+              ├─> preprocess_context_references() # @file/@url/@diff/@staged resolution
               ├─> ContextBuilder.build_prompt()   # dynamic system prompt
               ├─> provider.generate(...)          # LLM call (retry/backoff)
-              ├─> tool interception (load_skill/unload_skill)
-              └─> tools_map[tool_name](**args)    # execute real tool
+              ├─> tool interception (load_skill/unload_skill/load_mcp/unload_mcp)
+              └─> tools_map[tool_name](**args)    # execute real tool (including MCP client tool calls)
 ```
 
 ## Layer Definitions
 | Module | Responsibility |
 |--------|---------------|
 | `main.py` | Thin entry point; delegates to `cli.run_cli()`. |
-| `cli.py` | CLI parsing (`argparse`), `ConsoleAgentListener` (Rich UI), checkpoint detection/resume, provider bootstrap, agent instantiation. |
-| `agent.py` | `Agent` ReAct loop; `AgentListener` base class (no-op methods, **not** an ABC); `SYSTEM_PROMPT`. |
-| `context_builder.py` | `ContextBuilder`: discovers/parses `.agents/skills` + `.agents/rules`, compiles dynamic system prompt, supports load/unload of skills & rules at runtime. |
+| `cli.py` | CLI parsing (`argparse`), `ConsoleAgentListener` (Rich UI with verbose toggle), checkpoint detection/resume, provider bootstrap, agent instantiation. |
+| `agent.py` | `Agent` ReAct loop; `AgentListener` base class; `SYSTEM_PROMPT`. |
+| `context/` | Package managing prompt context: `builder.py` compiles dynamic system prompt (skills/rules); `references.py` parses and resolves prompt `@` references; `breakdown.py` calculates token usage metrics; `mcp.py` manages Model Context Protocol subprocess client lifecycles and dynamic tool mapping. |
 | `providers/` | LLM abstraction: `base.py` (`BaseLLMProvider` ABC, Pydantic models, `retry_with_backoff`), `openai.py`, `gemini.py`, `anthropic.py`, `__init__.py` (`get_provider` factory). |
-| `tools/` | Agent tools: `io_tools.py` (FS/code ops), `math_tools.py` (`calculate`), `multi_agent.py` (`spawn_subagents_parallel` + `CollectingAgentListener`); `__init__.py` defines `REGISTERED_TOOLS` (single source of truth) and derives `TOOLS_METADATA`, `TOOLS_MAP`, `set_active_provider`. |
-| `.agents/` | Dynamic context: `skills/` (loadable guidelines) + `rules/` (always-active constraints). |
+| `tools/` | Agent tools: `io_tools.py` (FS/code ops), `math_tools.py` (`calculate`), `multi_agent.py` (`spawn_subagents_parallel` + `CollectingAgentListener`); `__init__.py` defines `REGISTERED_TOOLS`. |
+| `.agents/` | Dynamic context: `skills/` (loadable guidelines), `rules/` (always-active constraints), and `mcp/` (JSON configs for stdio MCP servers). |
 
 ## Observed Patterns (with evidence)
 1. **Observer / Listener** — `AgentListener` (`agent.py:18`) decouples agent logic from presentation. Implementations: `ConsoleAgentListener` (`cli.py:24`), `CollectingAgentListener` (`tools/multi_agent.py:46`).

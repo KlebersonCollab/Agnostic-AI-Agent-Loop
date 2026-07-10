@@ -17,6 +17,7 @@
 | `pydantic` | `>=2.13.4` | Data validation / shared message & tool models |
 | `python-dotenv` | `>=1.2.2` | Loads `.env` variables (`load_dotenv()` in `providers/base.py`) |
 | `rich` | `>=15.0.0` | Terminal UI (panels, markdown, syntax, status spinners) |
+| `fastmcp` | `>=3.4.4` | High-level client for Model Context Protocol (MCP) |
 
 ## Dev / Test Tooling
 - **Test framework:** `pytest>=9.1.1` (declared in `[dependency-groups].dev`)
@@ -25,7 +26,7 @@
 
 ## External Integrations
 - LLM providers via unified abstraction: OpenAI, Gemini, Anthropic, OpenRouter, and OpenAI-compatible endpoints (Ollama, Groq, DeepSeek).
-- MCP configs present (`.agents/mcp/chrome-devtools.json`, `.agents/mcp/playwrite.json`) but **not referenced** by any Python source (INCONSISTENT — declared but unused).
+- MCP Client integration via `fastmcp`: Loads and communicates with external stdio MCP servers declared under `.agents/mcp/*.json`.
 
 ## Environment
 - `.env` (gitignored) holds API keys; `.env.example` documents OpenRouter defaults.
