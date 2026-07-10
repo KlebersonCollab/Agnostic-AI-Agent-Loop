@@ -247,6 +247,82 @@ REGISTERED_TOOLS = [
             }
         ),
         lambda query, category=None: "Success: Memory searched (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="load_mcp",
+            description="Start and connect to an external Model Context Protocol (MCP) server. Reads server command from '.agents/mcp/{server_name}.json'. Does NOT expose its tools to the prompt; you must call 'load_mcp_tool' to register specific tools.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_name": {
+                        "type": "string",
+                        "description": "The name of the MCP server config file (e.g. 'chrome-devtools', 'playwright')"
+                    }
+                },
+                "required": ["server_name"]
+            }
+        ),
+        lambda server_name: "Success: MCP server loaded (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="unload_mcp",
+            description="Disconnect and shut down an active Model Context Protocol (MCP) server process, terminating its subprocess and unregistering all of its tools.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_name": {
+                        "type": "string",
+                        "description": "The name of the active MCP server to unload"
+                    }
+                },
+                "required": ["server_name"]
+            }
+        ),
+        lambda server_name: "Success: MCP server unloaded (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="load_mcp_tool",
+            description="Expose a specific tool from a loaded MCP server to the agent loop, adding it to your active tools list for subsequent steps.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_name": {
+                        "type": "string",
+                        "description": "The name of the loaded MCP server"
+                    },
+                    "tool_name": {
+                        "type": "string",
+                        "description": "The name of the tool to load"
+                    }
+                },
+                "required": ["server_name", "tool_name"]
+            }
+        ),
+        lambda server_name, tool_name: "Success: MCP tool loaded (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="unload_mcp_tool",
+            description="Remove a specific tool of a loaded MCP server from your active tools list to free up context window space.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "server_name": {
+                        "type": "string",
+                        "description": "The name of the loaded MCP server"
+                    },
+                    "tool_name": {
+                        "type": "string",
+                        "description": "The name of the tool to unload"
+                    }
+                },
+                "required": ["server_name", "tool_name"]
+            }
+        ),
+        lambda server_name, tool_name: "Success: MCP tool unloaded (intercepted)"
     )
 ]
 
