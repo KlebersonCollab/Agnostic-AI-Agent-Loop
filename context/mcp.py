@@ -18,7 +18,7 @@ def run_async(coro):
             f.set_exception(e)
             
     fut = Future()
-    t = threading.Thread(target=target)
+    t = threading.Thread(target=target, args=(fut,))
     t.start()
     t.join()
     return fut.result()
