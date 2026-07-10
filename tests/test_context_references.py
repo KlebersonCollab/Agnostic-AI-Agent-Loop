@@ -1,4 +1,8 @@
-from context.references import parse_context_references, ContextReference, _is_path_safe
+from context.references import parse_context_references, ContextReference, _is_path_safe, preprocess_context_references
+import os
+import subprocess
+import urllib.request
+from unittest.mock import MagicMock, patch
 
 def test_parse_simple_references():
     prompt = "Please look at @diff and @staged"
@@ -61,4 +65,67 @@ def test_is_path_safe():
     safe, err = _is_path_safe(".ssh/id_rsa", cwd)
     assert not safe
     assert "sensitive blocklist" in err
+
+def test_preprocess_file_references(tmp_path):
+    cwd = str(tmp_path)
+    file_path = tmp_path / "hello.txt"
+    file_path.write_text("line 1\nline 2\nline 3\nline 4\n")
+
+    # Full file read
+    res = preprocess_context_references("Read this: @file:hello.txt", cwd=cwd)
+    assert not res.blocked
+    assert res.expanded
+    assert "Read this:" in res.message
+    assert "### File Reference: hello.txt" in res.message
+    assert "line 1\nline 2" in res.message
+
+    # Sliced file read
+    res_sliced = preprocess_context_references("Read slice: @file:hello.txt:2-3", cwd=cwd)
+    assert not res_sliced.blocked
+    assert res_sliced.expanded
+    assert "lines 2-3" in res_sliced.message
+    assert "line 2\nline 3" in res_sliced.message
+    assert "line 1" not in res_sliced.message.split("Context References")[1]
+
+def test_preprocess_blocked_file(tmp_path):
+    cwd = str(tmp_path)
+    res = preprocess_context_references("Read: @file:.env", cwd=cwd)
+    assert not res.blocked
+    assert "Warning: Blocked file reference" in res.message
+
+def test_preprocess_git_diff(tmp_path):
+    cwd = str(tmp_path)
+    with patch("subprocess.run") as mock_run:
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "diff content here"
+        mock_run.return_value = mock_res
+
+        res = preprocess_context_references("Check @diff", cwd=cwd)
+        assert res.expanded
+        assert "### Git Diff" in res.message
+        assert "diff content here" in res.message
+
+def test_preprocess_url(tmp_path):
+    cwd = str(tmp_path)
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"<html><body>Hello from HTML</body></html>"
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        res = preprocess_context_references("Visit @url:https://example.org", cwd=cwd)
+        assert res.expanded
+        assert "Hello from HTML" in res.message
+
+def test_preprocess_token_limits(tmp_path):
+    cwd = str(tmp_path)
+    file_path = tmp_path / "big.txt"
+    file_path.write_text("A" * 800)  # ~200 tokens
+
+    # Large content relative to small budget (100 tokens context window -> limit 50 tokens)
+    res = preprocess_context_references("Read: @file:big.txt", cwd=cwd, context_length=100)
+    assert res.blocked
+    assert not res.expanded
+    assert "@ context injection refused" in res.warnings[0]
+
 
