@@ -1,7 +1,9 @@
 from __future__ import annotations
 import re
+import os
 from dataclasses import dataclass, field
 from typing import Optional, List
+from pathlib import Path
 
 _QUOTED_REFERENCE_VALUE = r'(?:`[^`\n]+`|"[^"\n]+"|\'[^\'\n]+\')'
 REFERENCE_PATTERN = re.compile(
@@ -92,3 +94,43 @@ def parse_context_references(message: str) -> list[ContextReference]:
         )
 
     return refs
+
+_SENSITIVE_DIRS = {".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", ".git"}
+_SENSITIVE_FILES = {
+    ".netrc",
+    ".pgpass",
+    ".npmrc",
+    ".pypirc",
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".env.staging",
+    ".git-credentials"
+}
+
+def _is_path_safe(target: str, cwd: str) -> tuple[bool, str | None]:
+    cwd_path = Path(cwd).expanduser().resolve()
+    try:
+        raw_path = Path(target)
+        if raw_path.is_absolute():
+            resolved_path = raw_path.resolve()
+        else:
+            resolved_path = (cwd_path / raw_path).resolve()
+    except Exception as e:
+        return False, f"Invalid path resolution: {e}"
+
+    try:
+        resolved_path.relative_to(cwd_path)
+    except ValueError:
+        return False, "Path traversal detected: target is outside the workspace."
+
+    for part in resolved_path.parts:
+        if part in _SENSITIVE_DIRS:
+            return False, f"Access denied: directory '{part}' is on the sensitive blocklist."
+
+    if resolved_path.name in _SENSITIVE_FILES:
+        return False, f"Access denied: file '{resolved_path.name}' is on the sensitive blocklist."
+
+    return True, None
+

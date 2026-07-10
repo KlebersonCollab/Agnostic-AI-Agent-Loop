@@ -1,4 +1,4 @@
-from context.references import parse_context_references, ContextReference
+from context.references import parse_context_references, ContextReference, _is_path_safe
 
 def test_parse_simple_references():
     prompt = "Please look at @diff and @staged"
@@ -27,3 +27,38 @@ def test_parse_url_references():
     assert len(refs) == 1
     assert refs[0].kind == "url"
     assert refs[0].target == "https://example.com/status"
+
+def test_is_path_safe():
+    cwd = "/home/user/workspace"
+    # Safe paths
+    safe, err = _is_path_safe("agent.py", cwd)
+    assert safe
+    assert err is None
+
+    safe, err = _is_path_safe("context/builder.py", cwd)
+    assert safe
+
+    # Traversal unsafe path
+    safe, err = _is_path_safe("../../etc/passwd", cwd)
+    assert not safe
+    assert "Path traversal" in err
+
+    # Absolute unsafe path
+    safe, err = _is_path_safe("/etc/passwd", cwd)
+    assert not safe
+    assert "Path traversal" in err
+
+    # Sensitive files
+    safe, err = _is_path_safe(".env", cwd)
+    assert not safe
+    assert "sensitive blocklist" in err
+
+    safe, err = _is_path_safe("subfolder/.npmrc", cwd)
+    assert not safe
+    assert "sensitive blocklist" in err
+
+    # Sensitive directories
+    safe, err = _is_path_safe(".ssh/id_rsa", cwd)
+    assert not safe
+    assert "sensitive blocklist" in err
+
