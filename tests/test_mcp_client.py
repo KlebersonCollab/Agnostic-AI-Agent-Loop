@@ -49,8 +49,8 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
         is_error=False
     )
     
-    # Custom run_async mock to bypass real subprocess/network stdio connection
-    def mock_run_async(coro):
+    # Custom run_sync mock to bypass real subprocess/network stdio connection
+    def mock_run_sync(coro):
         coro_name = str(coro)
         if "list_tools" in coro_name:
             return [mock_tool]
@@ -58,10 +58,11 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
             return mock_result
         return None
 
-    # Patch Client and run_async, and mock builtins.open returning JSON
+    manager.run_sync = mock_run_sync
+
+    # Patch Client, and mock builtins.open returning JSON
     m = mock_open(read_data=json.dumps(config_data))
     with patch("context.mcp.Client") as MockClient, \
-         patch("context.mcp.run_async", side_effect=mock_run_async), \
          patch("os.path.exists", return_value=True), \
          patch("builtins.open", m):
          
@@ -92,3 +93,5 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
          unload_res = manager.unload_mcp("mock-server")
          assert "Unloaded MCP server 'mock-server'" in unload_res
          assert "mock-server" not in manager.active_clients
+         
+         manager.cleanup()

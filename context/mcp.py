@@ -8,31 +8,34 @@ from typing import Dict, Any, Set, List
 from fastmcp import Client
 from providers.base import ToolDefinition
 
-# Thread-safe async runner helper
-def run_async(coro):
-    def target(f: Future):
-        try:
-            res = asyncio.run(coro)
-            f.set_result(res)
-        except Exception as e:
-            f.set_exception(e)
-            
-    fut = Future()
-    t = threading.Thread(target=target, args=(fut,))
-    t.start()
-    t.join()
-    return fut.result()
-
 class MCPManager:
     """
     Manages Model Context Protocol (MCP) server lifecycles, subprocess clients,
     and dynamic tool registration/unregistration.
+    Uses a persistent background event loop to keep client connections active.
     """
     def __init__(self, agent):
         self.agent = agent
         self.active_clients: Dict[str, Client] = {}
         self.tools_metadata: Dict[str, Dict[str, Any]] = {}
         self.loaded_tools: Dict[str, Set[str]] = {}
+
+        # Start a persistent background event loop
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread.start()
+
+    def _run_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def run_sync(self, coro) -> Any:
+        """
+        Executes a coroutine thread-safely on the persistent background event loop
+        and blocks waiting for its result.
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result()
 
     def load_mcp(self, server_name: str) -> str:
         """
@@ -57,13 +60,13 @@ class MCPManager:
 
             client = Client(config_dict)
             
-            # Start client session asynchronously in a background loop
-            run_async(client.__aenter__())
+            # Start client session asynchronously in the persistent background loop
+            self.run_sync(client.__aenter__())
             self.active_clients[server_name] = client
             self.loaded_tools[server_name] = set()
 
             # Retrieve available tools from server
-            tools = run_async(client.list_tools())
+            tools = self.run_sync(client.list_tools())
             self.tools_metadata[server_name] = {t.name: t for t in tools}
 
             tool_list_str = "\n".join([f"- {t.name}: {t.description}" for t in tools]) if tools else "No tools available."
@@ -111,8 +114,8 @@ class MCPManager:
                 if not client:
                     return f"Error: MCP server '{s_name}' is not currently running."
                 
-                # Execute async call
-                res = run_async(client.call_tool(t_name, kwargs))
+                # Execute async call on persistent loop
+                res = self.run_sync(client.call_tool(t_name, kwargs))
                 
                 # Format response contents
                 text_results = []
@@ -170,8 +173,8 @@ class MCPManager:
 
         client = self.active_clients[server_name]
         try:
-            # Terminate subprocess and clean connection context
-            run_async(client.__aexit__(None, None, None))
+            # Terminate subprocess and clean connection context in persistent loop
+            self.run_sync(client.__aexit__(None, None, None))
         except Exception:
             pass
 
@@ -184,8 +187,17 @@ class MCPManager:
 
     def cleanup(self):
         """
-        Clean up all active servers and subprocesses (crucial to prevent process leaks).
+        Clean up all active servers and subprocesses, and shut down persistent event loop.
         """
         active_names = list(self.active_clients.keys())
         for name in active_names:
             self.unload_mcp(name)
+
+        # Safely shut down background loop and thread
+        if hasattr(self, "loop") and self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            self.thread.join(timeout=2.0)
+            try:
+                self.loop.close()
+            except Exception:
+                pass
