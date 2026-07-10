@@ -99,7 +99,7 @@ class ConsoleAgentListener(AgentListener):
     def on_thought(self, thought: str, is_final: bool = False):
         self._stop_status()
         if is_final:
-            console.print(thought)
+            console.print(Markdown(thought))
             console.print()
         else:
             elapsed = 1
