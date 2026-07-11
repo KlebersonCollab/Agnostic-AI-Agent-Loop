@@ -60,6 +60,12 @@
           <div class="text-secondary small">Observações</div>
         </div></div>
       </div>
+      <div class="col-4 col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+          <div class="stat-num text-warning" id="stat-stale">0</div>
+          <div class="text-secondary small">Stale/Ghost</div>
+        </div></div>
+      </div>
     </div>
 
     <!-- Controls -->
@@ -76,6 +82,12 @@
         <label class="form-label small mb-1">Filtrar por tipo</label>
         <select id="type-filter" class="form-select form-select-sm">
           <option value="">Todos os tipos</option>
+        </select>
+      </div>
+      <div class="col-8 col-md-3">
+        <label class="form-label small mb-1">Filtrar por role</label>
+        <select id="role-filter" class="form-select form-select-sm">
+          <option value="">Todos os roles</option>
         </select>
       </div>
       <div class="col-4 col-md-1 d-grid">
@@ -124,11 +136,55 @@
     };
     const FALLBACK_COLOR = "#8a8f98";
 
+    // ---- Palette for functional roles (MemGuard isolation) ----
+    const ROLE_COLORS = {
+      architecture:  "#5e6ad2",
+      user_profile:  "#27a644",
+      episodic:      "#e0a458",
+      rule:          "#d6455d",
+      decision:      "#5ec8d8",
+      preference:    "#828fff",
+      project_state: "#c77dff",
+      feedback:      "#7a7fad",
+    };
+    const ROLE_FALLBACK = "#8a8f98";
+
+    // ---- State badge styling ----
+    const STATE_BADGE = {
+      current:    "text-bg-success",
+      historical: "text-bg-secondary",
+      transition: "text-bg-warning",
+    };
+    function stateBadgeHtml(state) {
+      const cls = STATE_BADGE[state] || "text-bg-secondary";
+      return `<span class="badge type-badge ${cls}">${escapeHtml(state || "current")}</span>`;
+    }
+
     let ALL = { entities: [], relations: [], observations: [] };
     let network = null;
     let container = null;
 
     // ---- JSONL parsing ----
+    // Default-safe field resolution (backward compatible with flat records).
+    function normEntity(e) {
+      e.entityType = e.entityType || "Unknown";
+      e.role = e.role || "architecture";
+      e.state = e.state || "current";
+      e.confidence = e.confidence || "high";
+      e.observations = e.observations || [];
+      e.access_count = e.access_count || 0;
+      return e;
+    }
+    function normRelation(r) {
+      r.state = r.state || "current";
+      return r;
+    }
+    function normObservation(o) {
+      o.state = o.state || "current";
+      o.confidence = o.confidence || "high";
+      return o;
+    }
+
     function parseJSONL(text) {
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const entities = [], relations = [], observations = [];
@@ -137,17 +193,27 @@
         try { obj = JSON.parse(line); }
         catch (e) { console.warn("Linha ignorada (JSON inválido):", line); continue; }
         if (!obj || typeof obj !== "object" || !obj.type) continue;
-        if (obj.type === "entity") entities.push(obj);
-        else if (obj.type === "relation") relations.push(obj);
-        else if (obj.type === "observation") observations.push(obj);
+        if (obj.type === "entity") entities.push(normEntity(obj));
+        else if (obj.type === "relation") relations.push(normRelation(obj));
+        else if (obj.type === "observation") observations.push(normObservation(obj));
       }
-      // Merge observations into their entities
+      // Merge observations into their entities (carry state/confidence for display)
       const byName = new Map(entities.map(e => [e.name, e]));
       for (const obs of observations) {
         const ent = byName.get(obs.entityName);
         if (ent) {
-          ent.observations = (ent.observations || []).concat(obs.contents || []);
+          ent.observations = ent.observations.concat(obs.contents || []);
+          // If any observation is historical/transition, surface it on the entity for the ghost flag.
+          if (obs.state && obs.state !== "current") ent._hasNonCurrentObs = true;
         }
+      }
+      // Ghost detection: an entity that has BOTH a current and a historical/transition version,
+      // or is the target of a SUPERSEDED_BY relation.
+      const superseded = new Set(
+        relations.filter(r => r.relationType === "SUPERSEDED_BY").map(r => r.from)
+      );
+      for (const e of entities) {
+        e._ghost = superseded.has(e.name) || !!e._hasNonCurrentObs;
       }
       return { entities, relations, observations };
     }
@@ -157,24 +223,42 @@
       const nodes = entities.map(e => {
         const color = TYPE_COLORS[e.entityType] || FALLBACK_COLOR;
         const obs = (e.observations || []).join("\n");
+        const meta = [
+          "[" + (e.entityType || "?") + "]",
+          "role: " + (e.role || "architecture"),
+          "state: " + (e.state || "current"),
+          "confidence: " + (e.confidence || "high"),
+        ].join("\n");
+        const isHistorical = (e.state || "current") === "historical";
+        const borderStyle = isHistorical ? "dotted" : "solid";
         return {
           id: e.name,
           label: e.name,
           group: e.entityType,
-          title: (e.entityType ? "[" + e.entityType + "]\n" : "") + (obs || e.name),
-          color: { background: color, border: color, highlight: { background: "#fff", border: color } },
+          title: meta + (obs ? "\n\n" + obs : "\n" + e.name),
+          color: {
+            background: color,
+            border: e._ghost ? "#e0a458" : color,
+            highlight: { background: "#fff", border: e._ghost ? "#e0a458" : color },
+          },
+          borderWidth: e._ghost ? 3 : 2,
+          shapeProperties: { borderDashes: isHistorical ? [4, 3] : false },
           font: { color: "#f7f8f8" },
         };
       });
-      const edges = relations.map(r => ({
-        from: r.from,
-        to: r.to,
-        label: r.relationType,
-        arrows: "to",
-        font: { color: "#8a8f98", size: 10, strokeWidth: 0, background: "none" },
-        color: { color: "#34343a", highlight: "#5e6ad2" },
-        smooth: { type: "cubicBezier", roundness: 0.4 },
-      }));
+      const edges = relations.map(r => {
+        const isHistorical = (r.state || "current") === "historical";
+        return {
+          from: r.from,
+          to: r.to,
+          label: r.relationType,
+          arrows: "to",
+          dashes: isHistorical,
+          font: { color: "#8a8f98", size: 10, strokeWidth: 0, background: "none" },
+          color: { color: isHistorical ? "#5a5a5a" : "#34343a", highlight: "#5e6ad2" },
+          smooth: { type: "cubicBezier", roundness: 0.4 },
+        };
+      });
       return {
         nodes: new vis.DataSet(nodes),
         edges: new vis.DataSet(edges),
@@ -211,13 +295,20 @@
       el.innerHTML = "";
       for (const e of entities) {
         const card = document.createElement("div");
-        card.className = "card entity-card";
+        card.className = "card entity-card" + (e._ghost ? " border-warning" : "");
+        const stateBadge = stateBadgeHtml(e.state || "current");
+        const roleBadge = `<span class="badge type-badge text-bg-light">${escapeHtml(e.role || "architecture")}</span>`;
+        const ghostBadge = e._ghost ? `<span class="badge type-badge text-bg-warning">ghost</span>` : "";
         const obsHtml = (e.observations || []).map(o => `<div class="obs-item">• ${escapeHtml(o)}</div>`).join("");
         card.innerHTML = `
           <div class="card-body py-2">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-1">
               <span class="fw-semibold">${escapeHtml(e.name)}</span>
-              <span class="badge type-badge text-bg-secondary">${escapeHtml(e.entityType || "?")}</span>
+              <span class="d-flex gap-1">
+                ${stateBadge}
+                ${roleBadge}
+                ${ghostBadge}
+              </span>
             </div>
             ${obsHtml}
           </div>`;
@@ -242,31 +333,45 @@
       }
     }
 
-    // ---- Stats + type filter ----
+    // ---- Stats + type/role filters ----
     function updateStats() {
       document.getElementById("stat-entities").textContent = ALL.entities.length;
       document.getElementById("stat-relations").textContent = ALL.relations.length;
       document.getElementById("stat-observations").textContent = ALL.observations.length;
 
-      const sel = document.getElementById("type-filter");
-      const current = sel.value;
+      const staleCount = ALL.entities.filter(e => (e.state || "current") !== "current").length
+        + ALL.relations.filter(r => (r.state || "current") !== "current").length;
+      document.getElementById("stat-stale").textContent = staleCount;
+
+      const typeSel = document.getElementById("type-filter");
+      const currentType = typeSel.value;
       const types = [...new Set(ALL.entities.map(e => e.entityType).filter(Boolean))].sort();
-      sel.innerHTML = '<option value="">Todos os tipos</option>' +
+      typeSel.innerHTML = '<option value="">Todos os tipos</option>' +
         types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
-      if (types.includes(current)) sel.value = current;
+      if (types.includes(currentType)) typeSel.value = currentType;
+
+      const roleSel = document.getElementById("role-filter");
+      const currentRole = roleSel.value;
+      const roles = [...new Set(ALL.entities.map(e => e.role || "architecture").filter(Boolean))].sort();
+      roleSel.innerHTML = '<option value="">Todos os roles</option>' +
+        roles.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+      if (roles.includes(currentRole)) roleSel.value = currentRole;
     }
 
-    // ---- Apply search + type filter ----
+    // ---- Apply search + type + role filter ----
     function applyFilters() {
       const q = document.getElementById("search-input").value.trim().toLowerCase();
       const type = document.getElementById("type-filter").value;
+      const role = document.getElementById("role-filter").value;
       const ents = ALL.entities.filter(e => {
         const matchType = !type || e.entityType === type;
+        const matchRole = !role || (e.role || "architecture") === role;
         const matchQ = !q ||
           (e.name || "").toLowerCase().includes(q) ||
           (e.entityType || "").toLowerCase().includes(q) ||
+          (e.role || "").toLowerCase().includes(q) ||
           (e.observations || []).some(o => o.toLowerCase().includes(q));
-        return matchType && matchQ;
+        return matchType && matchRole && matchQ;
       });
       const names = new Set(ents.map(e => e.name));
       const rels = ALL.relations.filter(r => names.has(r.from) && names.has(r.to));
@@ -310,9 +415,11 @@
     });
     document.getElementById("search-input").addEventListener("input", applyFilters);
     document.getElementById("type-filter").addEventListener("change", applyFilters);
+    document.getElementById("role-filter").addEventListener("change", applyFilters);
     document.getElementById("reset-btn").addEventListener("click", () => {
       document.getElementById("search-input").value = "";
       document.getElementById("type-filter").value = "";
+      document.getElementById("role-filter").value = "";
       applyFilters();
     });
 

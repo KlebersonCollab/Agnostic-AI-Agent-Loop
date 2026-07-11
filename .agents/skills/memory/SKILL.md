@@ -1,6 +1,6 @@
 ---
 name: sdd-memory
-version: 1.0.0
+version: 1.1.0
 description: "Explorer agent for Spec Driven Development. Maps existing codebases into consolidated technical artifacts and manages CRUD memory for project metadata, architecture state, and user context."
 last_update: "2026-07-10"
 category: project-codebase-memory
@@ -56,20 +56,75 @@ Follow these steps strictly for each interaction:
 
 ### Record schemas
 
+> **Evolution note (2026):** The schema below is backward compatible. Every field beyond the
+> original core (`type`, `name`/`from`/`to`, `entityType`, `relationType`, `observations`/`contents`)
+> is **OPTIONAL** and defaults safely when absent. This closes the gaps identified against the 2026
+> agent-memory literature: temporal state & supersession (A-TMA 2607.01935, Supersede 2606.27472),
+> functional-role isolation (MemGuard 2605.28009), write verification (TrustMem 2606.25161), and
+> decay/consolidation (FadeMem 2601.18642, Manufactured Confidence 2606.29279).
+
 **Entity** (one line):
 ```json
-{"type":"entity","name":"string (Entity identifier)","entityType":"string (Type classification)","observations":["string (Associated observations)"]}
+{"type":"entity","name":"string (Entity identifier)","entityType":"string (Type classification)","observations":["string (Associated observations)"],"role":"architecture|user_profile|episodic|rule|decision|preference|project_state|feedback","state":"current|historical|transition","confidence":"high|medium|low|tentative","access_count":0,"last_accessed":"ISO8601|null"}
 ```
+- `role` *(optional, default `architecture`)*: functional classification used to prevent heterogeneous
+  memory contamination (MemGuard). Keep stable facts, episodic events, rules, and decisions in separate
+  roles so retrieval can be scoped to a single role.
+- `state` *(optional, default `current`)*: temporal status. `historical` = superseded/obsolete;
+  `transition` = in-flight change not yet finalized. Prevents *ghost memory* (A-TMA).
+- `confidence` *(optional, default `high`)*: `tentative` preserves hedged phrasing ("might prefer X")
+  and MUST NOT be upgraded to a flat assertion on write (Manufactured Confidence). `low` flags
+  weakly-supported claims.
+- `access_count` / `last_accessed` *(optional)*: maintenance signals for decay/consolidation.
 
 **Relation** (one line):
 ```json
-{"type":"relation","from":"string (Source entity)","to":"string (Target entity)","relationType":"string (Active voice relation)"}
+{"type":"relation","from":"string (Source entity)","to":"string (Target entity)","relationType":"string (Active voice relation)","state":"current|historical|transition","superseded_by":"<relation signature>|null"}
 ```
+- `state` *(optional, default `current`)*: same temporal semantics as entities.
+- `superseded_by` *(optional)*: links a `historical` relation to the relation that replaced it.
 
 **Observation** (append-only note to an existing entity; one line):
 ```json
-{"type":"observation","entityName":"string","contents":["string (New facts to add)"]}
+{"type":"observation","entityName":"string","contents":["string (New facts to add)"],"state":"current|historical|transition","confidence":"high|medium|low|tentative"}
 ```
+- `state` / `confidence` *(optional, defaults `current` / `high`)*: same semantics as above.
+
+### Write operations (how to perform them as file edits)
+
+- **create_entities** → Append one `entity` line per entity to `.agents/memory/memory_graph.jsonl`.
+  Ignore duplicates by checking existing `name` values already present in the file before appending.
+- **create_relations** → Append one `relation` line per relation. Skip duplicates (same `from`+`to`+`relationType`).
+- **add_observations** → Append one `observation` line referencing an existing entity `name`. If the
+  entity does not yet exist, first append its `entity` line, then the `observation` line.
+- **delete_entities** → Remove all lines whose `name`/`entityName` equals the target (entities and their
+  relations/observations). Use `patch_file` to delete those exact lines.
+- **delete_observations** → Remove the specific observation `contents` strings from the matching
+  `observation` lines via `patch_file`.
+- **delete_relations** → Remove the exact `relation` lines via `patch_file`.
+- **supersede** → When a fact changes (user moves, plan revised, decision reversed), NEVER blind-overwrite.
+  Instead: (1) patch the old record's line to `"state":"historical"`; (2) append the new record with
+  `"state":"current"`; (3) link them with a relation
+  `{"type":"relation","from":"<old name>","to":"<new name>","relationType":"SUPERSEDED_BY","state":"historical"}`
+  (or, for an observation, append a marker observation
+  `{"type":"observation","entityName":"<old name>","contents":["<fact> (superseded by: <new fact>)"],"state":"historical"}`).
+  This keeps the audit trail and prevents stale facts from being served as truth (Supersede 2606.27472).
+
+### verify_write — pre-append checklist (TrustMem 2606.25161)
+Before appending ANY record, evaluate three signals and encode the result in `confidence`:
+- **coverage**: Did we capture the load-bearing fact? If a key fact is missing, still append but note the gap.
+- **preservation**: Did we avoid deleting/overwriting prior distinct facts? Use `supersede`, never blind overwrite.
+- **faithfulness**: Is the content grounded in observed text / tool output / user statement? If unsupported
+  or invented → set `confidence:"low"` or drop the record. **NEVER persist secrets, API keys, or `.env`
+  contents** (reinforces the existing AGENTS.md rule). A hedged user remark is stored `confidence:"tentative"`,
+  keeping the hedge — it is NOT upgraded to a confident assertion.
+
+### decay & consolidate — maintenance guidance (FadeMem 2601.18642)
+- On every read/retrieval of a record, increment its `access_count` and refresh `last_accessed`.
+- **consolidate** (agent-triggered, not a daemon): merge duplicate/near-duplicate observations into one;
+  fade (`state:"historical"`) records with low `access_count` + low relevance + old `last_accessed`;
+  keep ALL distinct facts. `historical` records remain linked for audit. This bounds graph growth without
+  the binary "keep everything or lose it" failure mode of naive memory.
 
 ### Write operations (how to perform them as file edits)
 
