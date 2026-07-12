@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from providers import ChatMessage, MessageRole, ToolDefinition, BaseLLMProvider
 from memory import AgentMemory
 from context.references import preprocess_context_references
+from concurrent.futures import ThreadPoolExecutor
 
 SYSTEM_PROMPT = """You are a helpful autonomous agent.
 You solve tasks step-by-step.
@@ -193,75 +194,35 @@ class Agent:
                 break
 
             if response_msg.tool_calls:
-                for tool_call in response_msg.tool_calls:
+                # Execute tool calls concurrently
+                tool_calls_to_run = response_msg.tool_calls
+                results = [None] * len(tool_calls_to_run)
+                
+                # Use a thread pool to run tool calls in parallel
+                with ThreadPoolExecutor(max_workers=min(32, len(tool_calls_to_run))) as pool:
+                    futures = {
+                        pool.submit(self._execute_tool_call, tc.name, tc.arguments, step): i
+                        for i, tc in enumerate(tool_calls_to_run)
+                    }
+                    for future in futures:
+                        idx = futures[future]
+                        try:
+                            results[idx] = future.result()
+                        except Exception as e:
+                            # Catch executor-level issues just in case
+                            results[idx] = f"Error executing tool '{tool_calls_to_run[idx].name}': {e}"
+                
+                # Sequentially process results in the main thread (UI updates, database logging, history mapping)
+                for idx, result in enumerate(results):
+                    tool_call = tool_calls_to_run[idx]
                     tool_name = tool_call.name
                     tool_args = tool_call.arguments
                     tool_id = tool_call.id
                     
                     if self.listener:
                         self.listener.on_tool_call(tool_name, tool_args, tool_id)
-                    
-                    if tool_name == "load_skill":
-                        name = tool_args.get("name")
-                        if self.context_builder.load_skill(name):
-                            result = f"Success: Skill '{name}' has been loaded into your system prompt."
-                        else:
-                            result = f"Error: Skill '{name}' not found."
-                    elif tool_name == "load_mcp":
-                        s_name = tool_args.get("server_name")
-                        result = self.mcp_manager.load_mcp(s_name)
-                    elif tool_name == "unload_mcp":
-                        s_name = tool_args.get("server_name")
-                        result = self.mcp_manager.unload_mcp(s_name)
-                    elif tool_name == "load_mcp_tool":
-                        s_name = tool_args.get("server_name")
-                        t_name = tool_args.get("tool_name")
-                        result = self.mcp_manager.load_mcp_tool(s_name, t_name)
-                    elif tool_name == "unload_mcp_tool":
-                        s_name = tool_args.get("server_name")
-                        t_name = tool_args.get("tool_name")
-                        result = self.mcp_manager.unload_mcp_tool(s_name, t_name)
-                    elif tool_name == "unload_skill":
-                        name = tool_args.get("name")
-                        if self.context_builder.unload_skill(name):
-                            result = f"Success: Skill '{name}' has been unloaded from your system prompt."
-                        else:
-                            result = f"Error: Skill '{name}' was not loaded."
-                    elif tool_name == "search_memory":
-                        query = tool_args.get("query")
-                        category = tool_args.get("category")
-                        try:
-                            search_results = self.memory.search(query, category)
-                            if not search_results:
-                                result = f"No memories found matching '{query}'."
-                            else:
-                                formatted_results = []
-                                for idx, res in enumerate(search_results, 1):
-                                    timestamp = res["session_timestamp"] or "Unknown"
-                                    step_info = f", Step {res['step_number']}" if res["step_number"] is not None else ""
-                                    formatted_results.append(
-                                        f"--- Memory Match #{idx} ---\n"
-                                        f"Session ID: {res['session_id']}\n"
-                                        f"Date: {timestamp}{step_info}\n"
-                                        f"Category: {res['category']}\n"
-                                        f"Original Task: {res['task_prompt']}\n"
-                                        f"Content:\n{res['content']}\n"
-                                    )
-                                result = "\n".join(formatted_results)
-                        except Exception as e:
-                            result = f"Error searching memory: {e}"
-                    elif tool_name in self.tools_map:
-                        try:
-                            # Dynamically call the python function mapped to the tool name
-                            result = self.tools_map[tool_name](**tool_args)
-                        except Exception as e:
-                            result = f"Error executing tool '{tool_name}': {e}"
-                    else:
-                        result = f"Error: Tool '{tool_name}' is not registered/available."
-
-                    if self.listener:
                         self.listener.on_tool_output(tool_name, result)
-
+                    
                     # Log tool output to memory database
                     self.memory.add_episode(
                         session_id=self.session_id,
@@ -269,7 +230,7 @@ class Agent:
                         role="tool",
                         content=result
                     )
-
+                    
                     self.history.append(
                         ChatMessage(
                             role=MessageRole.TOOL,
@@ -294,4 +255,66 @@ class Agent:
             if self.listener:
                 self.listener.on_error("Reached maximum number of steps without completing.")
             self.memory.close()
+
+    def _execute_tool_call(self, tool_name: str, tool_args: Dict[str, Any], step: int) -> str:
+        # Wrap everything in try-except to guarantee isolation and prevent thread crash from propagating
+        try:
+            if tool_name == "load_skill":
+                name = tool_args.get("name")
+                if self.context_builder.load_skill(name):
+                    return f"Success: Skill '{name}' has been loaded into your system prompt."
+                else:
+                    return f"Error: Skill '{name}' not found."
+            elif tool_name == "load_mcp":
+                s_name = tool_args.get("server_name")
+                return self.mcp_manager.load_mcp(s_name)
+            elif tool_name == "unload_mcp":
+                s_name = tool_args.get("server_name")
+                return self.mcp_manager.unload_mcp(s_name)
+            elif tool_name == "load_mcp_tool":
+                s_name = tool_args.get("server_name")
+                t_name = tool_args.get("tool_name")
+                return self.mcp_manager.load_mcp_tool(s_name, t_name)
+            elif tool_name == "unload_mcp_tool":
+                s_name = tool_args.get("server_name")
+                t_name = tool_args.get("tool_name")
+                return self.mcp_manager.unload_mcp_tool(s_name, t_name)
+            elif tool_name == "unload_skill":
+                name = tool_args.get("name")
+                if self.context_builder.unload_skill(name):
+                    return f"Success: Skill '{name}' has been unloaded from your system prompt."
+                else:
+                    return f"Error: Skill '{name}' was not loaded."
+            elif tool_name == "search_memory":
+                query = tool_args.get("query")
+                category = tool_args.get("category")
+                try:
+                    search_results = self.memory.search(query, category)
+                    if not search_results:
+                        return f"No memories found matching '{query}'."
+                    else:
+                        formatted_results = []
+                        for idx, res in enumerate(search_results, 1):
+                            timestamp = res["session_timestamp"] or "Unknown"
+                            step_info = f", Step {res['step_number']}" if res["step_number"] is not None else ""
+                            formatted_results.append(
+                                f"--- Memory Match #{idx} ---\n"
+                                f"Session ID: {res['session_id']}\n"
+                                f"Date: {timestamp}{step_info}\n"
+                                f"Category: {res['category']}\n"
+                                f"Original Task: {res['task_prompt']}\n"
+                                f"Content:\n{res['content']}\n"
+                            )
+                        return "\n".join(formatted_results)
+                except Exception as e:
+                    return f"Error searching memory: {e}"
+            elif tool_name in self.tools_map:
+                try:
+                    return self.tools_map[tool_name](**tool_args)
+                except Exception as e:
+                    return f"Error executing tool '{tool_name}': {e}"
+            else:
+                return f"Error: Tool '{tool_name}' is not registered/available."
+        except Exception as e:
+            return f"Error executing tool '{tool_name}' due to thread exception: {e}"
 
