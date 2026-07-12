@@ -73,3 +73,9 @@
 {"type":"observation","entityName":"curl","contents":["Suporta limitação de tamanho da resposta por caractere (max_response_chars) para evitar estouro/bloat de contexto com o LLM provider"],"state":"current","confidence":"high"}
 {"type":"entity","name":"loop_command","entityType":"Feature","observations":["Comando /loop no CLI que remove preventivamente os limites baixos de iterações/passos, definindo max_steps=10000 para rodar até conclusão"],"state":"current","confidence":"high"}
 {"type":"relation","from":"cli.py","to":"loop_command","relationType":"IMPLEMENTS"}
+{"type":"entity","name":"concurrent_tool_execution","entityType":"Feature","observations":["Execução concorrente de tool calls via ThreadPoolExecutor em agent.py para otimização de latência","Isolamento e tratamento de exceções por thread para evitar travamentos do agente","Sincronização de transações SQLite no AgentMemory em memory.py via reentrant RLock","Validado com sucesso por tests/test_concurrent_tool_execution.py"],"state":"current","confidence":"high"}
+{"type":"relation","from":"agent.py","to":"concurrent_tool_execution","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"memory.py","to":"concurrent_tool_execution","relationType":"SUPPORTED_BY"}
+{"type":"relation","from":"concurrent_tool_execution","to":"tests/test_concurrent_tool_execution.py","relationType":"VERIFIED_BY"}
+{"type":"entity","name":"subagent_ui_enhancement","entityType":"Feature","observations":["Refatoração do CollectingAgentListener em tools/multi_agent.py para visualização alinhada em colunas","Utilização de Rich com bullets coloridos por role do subagente e ícones/cores distintas por evento","Passo do loop atualizado dinamicamente nos logs da thread"],"state":"current","confidence":"high"}
+{"type":"relation","from":"tools/multi_agent.py","to":"subagent_ui_enhancement","relationType":"IMPLEMENTS"}

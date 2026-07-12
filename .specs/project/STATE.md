@@ -1,10 +1,10 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: Implementing /loop command (feature: loop_command)
-- **Progress**: Implementation complete (cli.py updated, tests/test_cli_loop.py added). Passed all 57 tests.
+- **Current Task**: Implementing subagent UI enhancement (feature: subagent_ui_enhancement)
+- **Progress**: Implementation complete. Refactored CollectingAgentListener in tools/multi_agent.py with structured and aligned columns. Passed all 59 tests.
 - **Next Steps**:
-  - None. Feature successfully implemented and verified.
+  - None. Feature verified and complete.
 
 ## 💡 Decisions Log
 - **2026-07-10 - Context Reference Injection**: Decide to implement prompt-level `@file`, `@url`, `@diff`, `@staged` parsing to match Hermes Agent style context injection. (Completed)
@@ -15,6 +15,8 @@
 - **2026-07-11 - Curl Tool**: Implemented a programmatic `curl` tool using standard library `urllib` to handle HTTP requests (GET, POST, PUT, DELETE, PATCH, etc.) with custom headers, body/data, configurable timeouts, and bypassing SSL verification. (Completed)
 - **2026-07-12 - Curl Response Truncation**: Decided to add a `max_response_chars` parameter (default 50,000) and response truncation logic to the `curl` tool to prevent context bloating and token exhaustion errors on large HTTP responses. (Completed)
 - **2026-07-12 - Loop Command Mode**: Decided to introduce a `/loop <prompt>` prefix in both interactive and one-shot CLI modes. It temporarily increases the `max_steps` to 10000, bypassing standard early handover checkpoints and step limits to let the agent run long-running tasks to completion. (Completed)
+- **2026-07-12 - Concurrent Tool Execution**: Decided to run multiple tool calls concurrently in a ThreadPoolExecutor within agent.py to optimize latency, ensuring thread-safe database operations in AgentMemory with reentrant locks. (Completed)
+- **2026-07-12 - Subagent UI Enhancement**: Decided to refactor CollectingAgentListener in tools/multi_agent.py to output structured, aligned columns with Rich color coding for step tracking. (Completed)
 
 ## 🚧 Active Blockers
 - None.
