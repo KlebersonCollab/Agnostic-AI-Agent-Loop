@@ -33,33 +33,49 @@ class CollectingAgentListener(AgentListener):
         self.role = role
         self.color = color_code
         self.logs = []
+        self.step = 1
+        self.max_steps = 10
 
-    def log_and_print(self, msg: str):
-        self.logs.append(msg)
-        # Thread-safe Rich printing using markup styles, escaping content to prevent markup errors
-        console.print(f"[{self.color}][Subagent: {self.role}] {escape(msg)}[/]")
+    def log_and_print(self, event_icon: str, event_label: str, content: str, content_style: str = ""):
+        # Build plain text message to collect in self.logs
+        raw_msg = f"{event_icon} {event_label}: {content}"
+        self.logs.append(raw_msg)
+        
+        # Build beautifully aligned console print
+        role_part = f"[bold {self.color}]● {self.role:<28}[/]"
+        step_part = f"[dim]Step {self.step}/{self.max_steps}[/]"
+        divider = "[dim] ⎹ [/dim]"
+        event_part = f"{event_icon} [bold {self.color}]{event_label:<8}[/]"
+        content_part = f"[{content_style}]{escape(content)}[/{content_style}]" if content_style else escape(content)
+        
+        console.print(f"{role_part}{divider}{step_part}{divider}{event_part}{divider}{content_part}")
 
     def on_step_start(self, step: int, max_steps: int):
-        self.log_and_print(f"--- Step {step} / {max_steps} ---")
+        self.step = step
+        self.max_steps = max_steps
+        self.log_and_print("🚀", "Step", f"Starting step {step} of {max_steps}", "dim")
 
     def on_thought(self, thought: str):
         clean_thought = thought.replace("\n", " ")
         snippet = clean_thought[:120] + "..." if len(clean_thought) > 120 else clean_thought
-        self.log_and_print(f"🤖 Thought: {snippet}")
+        self.log_and_print("🤖", "Thought", snippet, "italic dim")
 
     def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
-        self.log_and_print(f"🛠️ Tool Call: {name}({json.dumps(arguments)})")
+        args_str = json.dumps(arguments, ensure_ascii=False)
+        if len(args_str) > 80:
+            args_str = args_str[:77] + "..."
+        self.log_and_print("🛠️", "Call", f"{name}({args_str})", "yellow")
 
     def on_tool_output(self, name: str, result: str):
         clean_result = result.replace("\n", " ")
         snippet = clean_result[:100] + "..." if len(clean_result) > 100 else clean_result
-        self.log_and_print(f"📥 Tool Output: {snippet}")
+        self.log_and_print("📥", "Output", snippet, "dim")
 
     def on_error(self, message: str):
-        self.log_and_print(f"❌ Error: {message}")
+        self.log_and_print("❌", "Error", message, "bold red")
 
     def on_complete(self):
-        self.log_and_print(f"🏁 Completed task successfully.")
+        self.log_and_print("🏁", "Complete", "Task completed successfully.", "bold green")
 
 
 def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
