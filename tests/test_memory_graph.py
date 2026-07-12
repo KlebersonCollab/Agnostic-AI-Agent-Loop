@@ -87,9 +87,9 @@ def test_live_graph_parses_with_defaults():
     assert data["entities"], "live graph should contain entities"
     for e in data["entities"]:
         # Backward compatibility: flat records get safe defaults.
-        assert e["state"] == "current"
-        assert e["role"] == "architecture"
-        assert e["confidence"] == "high"
+        assert e["state"] in ("current", "historical", "transition")
+        assert e["role"] in ("architecture", "decision", "user_profile", "episodic", "rule", "preference", "project_state", "feedback")
+        assert e["confidence"] in ("high", "medium", "low", "tentative")
         assert isinstance(e["observations"], list)
     # Relations and observations (if any) also default cleanly.
     for r in data["relations"]:

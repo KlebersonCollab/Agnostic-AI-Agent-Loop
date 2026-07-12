@@ -66,3 +66,8 @@
 {"type":"relation","from":".agents/skills/memory/SKILL.md","to":"sdd_memory_evolution","relationType":"IMPLEMENTS"}
 {"type":"relation","from":"front/","to":"sdd_memory_evolution","relationType":"IMPLEMENTS"}
 {"type":"observation","entityName":"sdd_memory_evolution","contents":["Decisão 2026-07-11: manter abordagem JSONL-as-artifact (sem lib Python de grafo); evoluir schema no SKILL.md + consumidor front"],"state":"current","confidence":"high"}
+{"type":"entity","name":"tools/web_tools.py","entityType":"Module","observations":["Implementa curl tool utilizando a biblioteca padrão urllib"]}
+{"type":"relation","from":"tools/","to":"tools/web_tools.py","relationType":"CONTAINS"}
+{"type":"entity","name":"curl","entityType":"Tool","observations":["Ferramenta para executar requisições HTTP simulando curl de forma programática"]}
+{"type":"relation","from":"tools/web_tools.py","to":"curl","relationType":"IMPLEMENTS"}
+{"type":"observation","entityName":"curl","contents":["Suporta limitação de tamanho da resposta por caractere (max_response_chars) para evitar estouro/bloat de contexto com o LLM provider"],"state":"current","confidence":"high"}

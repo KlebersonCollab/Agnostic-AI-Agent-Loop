@@ -2,6 +2,7 @@ from providers import ToolDefinition
 from . import io_tools
 from . import math_tools
 from . import multi_agent
+from . import web_tools
 
 # Expose provider setup method for main CLI bootstrap
 set_active_provider = multi_agent.set_active_provider
@@ -87,6 +88,54 @@ REGISTERED_TOOLS = [
             }
         ),
         math_tools.calculate
+    ),
+    (
+        ToolDefinition(
+            name="curl",
+            description="Perform an HTTP request mimicking curl. Supports custom method, headers, data payload, timeout, and disabling SSL verification.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The target HTTP/HTTPS URL."
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method (GET, POST, PUT, DELETE, PATCH, etc.). Defaults to GET.",
+                        "default": "GET"
+                    },
+                    "headers": {
+                        "type": "object",
+                        "description": "Optional dictionary of custom HTTP headers.",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "data": {
+                        "type": "string",
+                        "description": "Optional raw request body data string."
+                    },
+                    "verify_ssl": {
+                        "type": "boolean",
+                        "description": "If False, ignores SSL certificate errors (like curl -k). Defaults to True.",
+                        "default": True
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Request timeout in seconds. Defaults to 15.",
+                        "default": 15
+                    },
+                    "max_response_chars": {
+                        "type": "integer",
+                        "description": "Maximum number of characters to return in the response body (to prevent context bloating). Defaults to 50000.",
+                        "default": 50000
+                    }
+                },
+                "required": ["url"]
+            }
+        ),
+        web_tools.curl
     ),
     (
         ToolDefinition(
