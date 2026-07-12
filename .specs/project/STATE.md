@@ -1,8 +1,8 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: Implementing curl tool (feature: curl_tool)
-- **Progress**: Implementation and revision complete (added max_response_chars and response truncation to prevent context bloat). Passed all 56 tests.
+- **Current Task**: Implementing /loop command (feature: loop_command)
+- **Progress**: Implementation complete (cli.py updated, tests/test_cli_loop.py added). Passed all 57 tests.
 - **Next Steps**:
   - None. Feature successfully implemented and verified.
 
@@ -14,6 +14,7 @@
 - **2026-07-11 - sdd-memory Evolution**: Evolve the knowledge-graph protocol (SKILL.md) + frontend to close 2026 literature gaps: temporal `state` (current/historical/transition) with `supersede` op to kill ghost memory; functional `role` isolation (MemGuard); `verify_write` checklist + `confidence` field (TrustMem / Manufactured Confidence); `decay`/`consolidate` guidance (FadeMem). All new fields optional/backward-compatible. (Completed)
 - **2026-07-11 - Curl Tool**: Implemented a programmatic `curl` tool using standard library `urllib` to handle HTTP requests (GET, POST, PUT, DELETE, PATCH, etc.) with custom headers, body/data, configurable timeouts, and bypassing SSL verification. (Completed)
 - **2026-07-12 - Curl Response Truncation**: Decided to add a `max_response_chars` parameter (default 50,000) and response truncation logic to the `curl` tool to prevent context bloating and token exhaustion errors on large HTTP responses. (Completed)
+- **2026-07-12 - Loop Command Mode**: Decided to introduce a `/loop <prompt>` prefix in both interactive and one-shot CLI modes. It temporarily increases the `max_steps` to 10000, bypassing standard early handover checkpoints and step limits to let the agent run long-running tasks to completion. (Completed)
 
 ## 🚧 Active Blockers
 - None.
