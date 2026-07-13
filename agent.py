@@ -75,11 +75,16 @@ class Agent:
         self.exit_reason: Optional[str] = None
         self.handover_checkpoint: Optional[str] = None
 
+        from hooks import HooksManager
+        self.hooks = HooksManager()
+        self.hooks.trigger_on_session_start(self)
+
     def run(self, user_prompt: str):
         try:
             self._run_internal(user_prompt)
         finally:
             self.mcp_manager.cleanup()
+            self.hooks.trigger_on_session_complete(self)
 
     def _run_internal(self, user_prompt: str):
         # Resolve any context references in the user prompt
@@ -101,6 +106,7 @@ class Agent:
         self.handover_checkpoint = None
 
         for step in range(1, self.max_steps + 1):
+            self.hooks.trigger_pre_step(self, step)
             if self.listener:
                 self.listener.on_step_start(step, self.max_steps)
             
@@ -123,25 +129,15 @@ class Agent:
                 self.history.append(ChatMessage(role=MessageRole.SYSTEM, content=warning_prompt))
                 
                 try:
-                    response_msg = self.provider.generate(
-                        messages=self.history,
-                        tools=None,  # Force no tool calling
-                        temperature=0.2
-                    )
+                    response_msg = self._generate_with_hooks(self.history, None)
                 except Exception as e:
-                    if self.listener:
-                        self.listener.on_error(f"Error communicating with provider during emergency handover: {e}")
+                    self._notify_error(f"Error communicating with provider during emergency handover: {e}")
                     break
             else:
                 try:
-                    response_msg = self.provider.generate(
-                        messages=self.history,
-                        tools=self.tools,
-                        temperature=0.2
-                    )
+                    response_msg = self._generate_with_hooks(self.history, self.tools)
                 except Exception as e:
-                    if self.listener:
-                        self.listener.on_error(f"Error communicating with provider: {e}")
+                    self._notify_error(f"Error communicating with provider: {e}")
                     break
 
             if response_msg.content:
@@ -240,6 +236,7 @@ class Agent:
                             name=tool_name
                         )
                     )
+                self.hooks.trigger_post_step(self, step)
                 continue
             else:
                 # Log final response summary to memory database
@@ -253,46 +250,51 @@ class Agent:
                 self.memory.close()
                 break
         else:
-            if self.listener:
-                self.listener.on_error("Reached maximum number of steps without completing.")
+            self._notify_error("Reached maximum number of steps without completing.")
             self.memory.close()
 
     def _execute_tool_call(self, tool_name: str, tool_args: Dict[str, Any], step: int) -> str:
+        # Trigger pre_tool_call hook
+        res = self.hooks.trigger_pre_tool_call(tool_name, tool_args)
+        if res:
+            tool_name, tool_args = res
+
+        result = None
         # Wrap everything in try-except to guarantee isolation and prevent thread crash from propagating
         try:
             if tool_name == "load_skill":
                 name = tool_args.get("name")
                 if self.context_builder.load_skill(name):
-                    return f"Success: Skill '{name}' has been loaded into your system prompt."
+                    result = f"Success: Skill '{name}' has been loaded into your system prompt."
                 else:
-                    return f"Error: Skill '{name}' not found."
+                    result = f"Error: Skill '{name}' not found."
             elif tool_name == "load_mcp":
                 s_name = tool_args.get("server_name")
-                return self.mcp_manager.load_mcp(s_name)
+                result = self.mcp_manager.load_mcp(s_name)
             elif tool_name == "unload_mcp":
                 s_name = tool_args.get("server_name")
-                return self.mcp_manager.unload_mcp(s_name)
+                result = self.mcp_manager.unload_mcp(s_name)
             elif tool_name == "load_mcp_tool":
                 s_name = tool_args.get("server_name")
                 t_name = tool_args.get("tool_name")
-                return self.mcp_manager.load_mcp_tool(s_name, t_name)
+                result = self.mcp_manager.load_mcp_tool(s_name, t_name)
             elif tool_name == "unload_mcp_tool":
                 s_name = tool_args.get("server_name")
                 t_name = tool_args.get("tool_name")
-                return self.mcp_manager.unload_mcp_tool(s_name, t_name)
+                result = self.mcp_manager.unload_mcp_tool(s_name, t_name)
             elif tool_name == "unload_skill":
                 name = tool_args.get("name")
                 if self.context_builder.unload_skill(name):
-                    return f"Success: Skill '{name}' has been unloaded from your system prompt."
+                    result = f"Success: Skill '{name}' has been unloaded from your system prompt."
                 else:
-                    return f"Error: Skill '{name}' was not loaded."
+                    result = f"Error: Skill '{name}' was not loaded."
             elif tool_name == "search_memory":
                 query = tool_args.get("query")
                 category = tool_args.get("category")
                 try:
                     search_results = self.memory.search(query, category)
                     if not search_results:
-                        return f"No memories found matching '{query}'."
+                        result = f"No memories found matching '{query}'."
                     else:
                         formatted_results = []
                         for idx, res in enumerate(search_results, 1):
@@ -306,16 +308,47 @@ class Agent:
                                 f"Original Task: {res['task_prompt']}\n"
                                 f"Content:\n{res['content']}\n"
                             )
-                        return "\n".join(formatted_results)
+                        result = "\n".join(formatted_results)
                 except Exception as e:
-                    return f"Error searching memory: {e}"
+                    custom_err = self.hooks.trigger_on_tool_error(tool_name, tool_args, e)
+                    if custom_err is not None:
+                        result = custom_err
+                    else:
+                        result = f"Error searching memory: {e}"
             elif tool_name in self.tools_map:
                 try:
-                    return self.tools_map[tool_name](**tool_args)
+                    result = self.tools_map[tool_name](**tool_args)
                 except Exception as e:
-                    return f"Error executing tool '{tool_name}': {e}"
+                    custom_err = self.hooks.trigger_on_tool_error(tool_name, tool_args, e)
+                    if custom_err is not None:
+                        result = custom_err
+                    else:
+                        result = f"Error executing tool '{tool_name}': {e}"
             else:
-                return f"Error: Tool '{tool_name}' is not registered/available."
+                result = f"Error: Tool '{tool_name}' is not registered/available."
         except Exception as e:
-            return f"Error executing tool '{tool_name}' due to thread exception: {e}"
+            custom_err = self.hooks.trigger_on_tool_error(tool_name, tool_args, e)
+            if custom_err is not None:
+                result = custom_err
+            else:
+                result = f"Error executing tool '{tool_name}' due to thread exception: {e}"
+
+        # Trigger post_tool_call hook
+        result = self.hooks.trigger_post_tool_call(tool_name, tool_args, result)
+        return result
+
+    def _notify_error(self, message: str):
+        if self.listener:
+            self.listener.on_error(message)
+        self.hooks.trigger_on_error(self, message)
+
+    def _generate_with_hooks(self, messages, tools):
+        messages, tools = self.hooks.trigger_pre_api_request(messages, tools)
+        response_msg = self.provider.generate(
+            messages=messages,
+            tools=tools,
+            temperature=0.2
+        )
+        response_msg = self.hooks.trigger_post_api_request(response_msg)
+        return response_msg
 
