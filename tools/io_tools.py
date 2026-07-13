@@ -7,9 +7,21 @@ from typing import Optional
 # Thread safety lock for writing/modifying operations
 _file_write_lock = threading.Lock()
 
+def _is_safe_path(filename: str) -> bool:
+    """Verifies that the absolute path of the file resides strictly within the current working directory."""
+    try:
+        abs_path = os.path.abspath(filename)
+        cwd = os.getcwd()
+        common = os.path.commonpath([cwd, abs_path])
+        return common == cwd
+    except (ValueError, Exception):
+        return False
+
 def list_project_files(path: str = ".") -> str:
     """Lists files and folders in the specified directory recursively, ignoring virtual environments and git folders."""
     try:
+        if not _is_safe_path(path):
+            return "Error: Access denied. Cannot list files outside the project directory."
         ignored = {".git", ".venv", "__pycache__", ".pytest_cache", ".idea", ".vscode"}
         output = []
         for root, dirs, files in os.walk(path):
@@ -40,11 +52,9 @@ def list_project_files(path: str = ".") -> str:
 def read_file(filename: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> str:
     """Reads the content of a file, supporting optional start_line and end_line parameters (1-indexed, inclusive)."""
     try:
-        # Resolve real path to ensure it's in the workspace
-        abs_path = os.path.abspath(filename)
-        cwd = os.getcwd()
-        if not abs_path.startswith(cwd):
+        if not _is_safe_path(filename):
             return "Error: Access denied. Cannot read files outside the project directory."
+        abs_path = os.path.abspath(filename)
             
         if not os.path.exists(abs_path):
             return f"Error: File '{filename}' does not exist."
@@ -74,11 +84,9 @@ def read_file(filename: str, start_line: Optional[int] = None, end_line: Optiona
 def write_file(filename: str, content: str) -> str:
     """Writes content to a file. Overwrites if the file already exists (Thread Safe)."""
     try:
-        # Resolve real path to ensure it's in the workspace
-        abs_path = os.path.abspath(filename)
-        cwd = os.getcwd()
-        if not abs_path.startswith(cwd):
+        if not _is_safe_path(filename):
             return "Error: Access denied. Cannot write files outside the project directory."
+        abs_path = os.path.abspath(filename)
 
         with _file_write_lock:
             # Create parent directories if they don't exist
@@ -96,11 +104,9 @@ def patch_file(filename: str, target_block: str, replacement_block: str) -> str:
     This avoids rewriting the entire file and is thread-safe.
     """
     try:
-        # Resolve real path to ensure it's in the workspace
-        abs_path = os.path.abspath(filename)
-        cwd = os.getcwd()
-        if not abs_path.startswith(cwd):
+        if not _is_safe_path(filename):
             return "Error: Access denied. Cannot write files outside the project directory."
+        abs_path = os.path.abspath(filename)
 
         if not os.path.exists(abs_path):
             return f"Error: File '{filename}' does not exist."
@@ -137,6 +143,8 @@ def search_grep(query: str, path: str = ".", is_regex: bool = False, case_insens
     Searches for a query string or regex pattern recursively in the workspace files.
     """
     try:
+        if not _is_safe_path(path):
+            return "Error: Access denied. Cannot search outside the project directory."
         ignored = {".git", ".venv", "__pycache__", ".pytest_cache", ".idea", ".vscode"}
         flags = re.IGNORECASE if case_insensitive else 0
         
@@ -177,11 +185,9 @@ def get_outline(filename: str) -> str:
     understand the module layout without reading the entire source code.
     """
     try:
-        # Resolve real path to ensure it's in the workspace
-        abs_path = os.path.abspath(filename)
-        cwd = os.getcwd()
-        if not abs_path.startswith(cwd):
+        if not _is_safe_path(filename):
             return "Error: Access denied. Cannot access files outside the project directory."
+        abs_path = os.path.abspath(filename)
 
         if not os.path.exists(abs_path):
             return f"Error: File '{filename}' does not exist."
