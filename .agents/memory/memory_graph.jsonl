@@ -81,3 +81,7 @@
 {"type":"relation","from":"tools/multi_agent.py","to":"subagent_ui_enhancement","relationType":"IMPLEMENTS"}
 {"type":"observation","entityName":"tools/","contents":["Vulnerabilidade de path traversal fraca no io_tools.py usando startswith(cwd) sem delimitador"],"state":"current","confidence":"high"}
 {"type":"observation","entityName":"pytest","contents":["RuntimeWarning de corrotina mock_run_sync nao awaitada no test_mcp_client.py"],"state":"current","confidence":"high"}
+{"type":"entity","name":"hooks/","entityType":"Package","observations":["Pacote de hooks dinâmicos","manager.py: HooksManager carrega módulos dinamicamente do pacote e do workspace"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"hooks_system","entityType":"Feature","observations":["Sistema de 11 triggers cobrindo ciclo de vida do agente, chamadas à LLM e execução de tools"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"hooks/","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"hooks/","to":"hooks_system","relationType":"IMPLEMENTS","state":"current"}
