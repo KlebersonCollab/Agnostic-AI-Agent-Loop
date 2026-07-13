@@ -95,3 +95,55 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
          assert "mock-server" not in manager.active_clients
          
          manager.cleanup()
+
+def test_mcp_config_caching_and_invalidation(agent, tmp_path):
+    # Setup test config files in tmp_path
+    config_a = {"mcpServers": {"server-a": {"command": "echo", "args": ["A"]}}}
+    config_b = {"mcpServers": {"server-b": {"command": "echo", "args": ["B"]}}}
+    
+    file_a = tmp_path / "server-a.json"
+    with open(file_a, "w", encoding="utf-8") as f:
+        json.dump(config_a, f)
+        
+    # Initialize manager with custom config directory
+    manager = MCPManager(agent=agent, config_dirs=[str(tmp_path)])
+    
+    try:
+        # 1. Startup pre-caching check
+        available = manager.get_available_mcp_servers()
+        assert "server-a" in available
+        assert available["server-a"]["config"]["mcpServers"]["server-a"]["args"] == ["A"]
+        
+        # 2. Invalidation upon modification
+        config_a_updated = {"mcpServers": {"server-a": {"command": "echo", "args": ["A_updated"]}}}
+        # Write and force update mtime
+        with open(file_a, "w", encoding="utf-8") as f:
+            json.dump(config_a_updated, f)
+        
+        # Modify file mtime forward to ensure mtime change is detected
+        curr_mtime = os.path.getmtime(file_a)
+        os.utime(file_a, (curr_mtime + 5, curr_mtime + 5))
+        
+        manager.check_and_update_cache()
+        available = manager.get_available_mcp_servers()
+        assert available["server-a"]["config"]["mcpServers"]["server-a"]["args"] == ["A_updated"]
+        
+        # 3. Dynamic addition check
+        file_b = tmp_path / "server-b.json"
+        with open(file_b, "w", encoding="utf-8") as f:
+            json.dump(config_b, f)
+            
+        manager.check_and_update_cache()
+        available = manager.get_available_mcp_servers()
+        assert "server-b" in available
+        assert available["server-b"]["config"]["mcpServers"]["server-b"]["args"] == ["B"]
+        
+        # 4. Dynamic removal check
+        os.remove(file_a)
+        manager.check_and_update_cache()
+        available = manager.get_available_mcp_servers()
+        assert "server-a" not in available
+        assert "server-b" in available
+        
+    finally:
+        manager.cleanup()
