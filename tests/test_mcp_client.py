@@ -35,7 +35,7 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config_data, f)
 
-    manager = MCPManager(agent=agent)
+    manager = MCPManager(agent=agent, config_dirs=[str(mcp_dir)])
     
     # Define mock tool and call results
     mock_tool = Tool(

@@ -14,11 +14,26 @@ class MCPManager:
     and dynamic tool registration/unregistration.
     Uses a persistent background event loop to keep client connections active.
     """
-    def __init__(self, agent):
+    def __init__(self, agent, config_dirs: List[str] = None):
         self.agent = agent
         self.active_clients: Dict[str, Client] = {}
         self.tools_metadata: Dict[str, Dict[str, Any]] = {}
         self.loaded_tools: Dict[str, Set[str]] = {}
+        self.config_cache: Dict[str, Dict[str, Any]] = {}
+
+        if config_dirs is not None:
+            self.config_dirs = config_dirs
+        else:
+            self.config_dirs = []
+            package_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            builtin_mcp = os.path.join(package_root, ".agents", "mcp")
+            self.config_dirs.append(builtin_mcp)
+            cwd_mcp = os.path.join(os.getcwd(), ".agents", "mcp")
+            if os.path.abspath(cwd_mcp) != os.path.abspath(builtin_mcp):
+                self.config_dirs.append(cwd_mcp)
+
+        # Pre-cache configs at startup
+        self.check_and_update_cache()
 
         # Start a persistent background event loop
         self.loop = asyncio.new_event_loop()
@@ -37,27 +52,60 @@ class MCPManager:
         future = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return future.result()
 
+    def check_and_update_cache(self):
+        """
+        Scans config directories for any JSON config files, caches them,
+        and invalidates/updates/removes cache entries dynamically.
+        """
+        seen_servers = set()
+        for folder in self.config_dirs:
+            if not os.path.exists(folder):
+                continue
+            try:
+                for item in os.listdir(folder):
+                    if item.endswith(".json"):
+                        server_name = os.path.splitext(item)[0]
+                        filepath = os.path.join(folder, item)
+                        try:
+                            mtime = os.path.getmtime(filepath)
+                            cached = self.config_cache.get(server_name)
+                            if not cached or cached["mtime"] != mtime:
+                                with open(filepath, "r", encoding="utf-8") as f:
+                                    config_dict = json.load(f)
+                                self.config_cache[server_name] = {
+                                    "mtime": mtime,
+                                    "config": config_dict,
+                                    "path": filepath
+                                }
+                            seen_servers.add(server_name)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # Remove deleted configs from cache
+        for name in list(self.config_cache.keys()):
+            if name not in seen_servers:
+                del self.config_cache[name]
+
+    def get_available_mcp_servers(self) -> Dict[str, Dict[str, Any]]:
+        """Returns the dictionary of currently cached configurations."""
+        return self.config_cache
+
     def load_mcp(self, server_name: str) -> str:
         """
-        Loads and connects to an MCP server, reading command config from .agents/mcp/{server_name}.json.
+        Loads and connects to an MCP server, reading command config from cached configurations.
         Lists available tools without exposing them to the agent's prompt schema.
         """
         if server_name in self.active_clients:
             return f"MCP server '{server_name}' is already loaded and active."
 
-        # Search for configuration file in workspace `.agents/mcp/`
-        config_path = os.path.abspath(os.path.join(os.getcwd(), ".agents", "mcp", f"{server_name}.json"))
-        if not os.path.exists(config_path):
-            # Fallback to package root
-            package_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_path = os.path.abspath(os.path.join(package_root, ".agents", "mcp", f"{server_name}.json"))
-            if not os.path.exists(config_path):
-                return f"Error: MCP configuration file for '{server_name}' not found at {config_path}."
+        self.check_and_update_cache()
+        if server_name not in self.config_cache:
+            return f"Error: MCP configuration for '{server_name}' not found."
 
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config_dict = json.load(f)
-
+            config_dict = self.config_cache[server_name]["config"]
             client = Client(config_dict)
             
             # Start client session asynchronously in the persistent background loop
