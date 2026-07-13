@@ -79,3 +79,5 @@
 {"type":"relation","from":"concurrent_tool_execution","to":"tests/test_concurrent_tool_execution.py","relationType":"VERIFIED_BY"}
 {"type":"entity","name":"subagent_ui_enhancement","entityType":"Feature","observations":["Refatoração do CollectingAgentListener em tools/multi_agent.py para visualização alinhada em colunas","Utilização de Rich com bullets coloridos por role do subagente e ícones/cores distintas por evento","Passo do loop atualizado dinamicamente nos logs da thread"],"state":"current","confidence":"high"}
 {"type":"relation","from":"tools/multi_agent.py","to":"subagent_ui_enhancement","relationType":"IMPLEMENTS"}
+{"type":"observation","entityName":"tools/","contents":["Vulnerabilidade de path traversal fraca no io_tools.py usando startswith(cwd) sem delimitador"],"state":"current","confidence":"high"}
+{"type":"observation","entityName":"pytest","contents":["RuntimeWarning de corrotina mock_run_sync nao awaitada no test_mcp_client.py"],"state":"current","confidence":"high"}
