@@ -25,46 +25,64 @@ Este projeto implementa um **loop de agente autônomo** que:
 
 O projeto é organizado em módulos, cada um com uma responsabilidade bem definida:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                              main.py                                 │
-│                          (chama run_cli)                             │
-│                                │                                      │
-│                                ▼                                      │
-│                              cli.py                                  │
-│  ┌──────────────────────┐   ┌──────────────────────────────────┐    │
-│  │ ConsoleAgentListener │   │  run_cli() — parsing de argumentos│    │
-│  │ (saída colorida)     │   │  e orquestração da sessão         │    │
-│  └──────────┬───────────┘   └───────────────┬──────────────────┘    │
-│             │                               │                        │
-│             ▼                               ▼                        │
-│  ┌─────────────────────────────────────────────────────┐           │
-│  │                      agent.py                        │           │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌──────────┐  │           │
-│  │  │   Agent     │───▶│  Provider   │───▶│  Tools   │  │           │
-│  │  │   Loop      │    │  Factory    │    │(FS/Calc/ │  │           │
-│  │  └──────┬──────┘    └──────┬──────┘    │ Subagents)│  │           │
-│  │       AgentListener (classe base)  │          └──────────┘  │           │
-│  │       MCPManager (context/mcp.py)  │                         │           │
-│  └────────────┬───────────────┼──────────────────────────┘           │
-│               │                │                                      │
-│               ▼                ▼                                      │
-│  ┌────────────────────┐  ┌──────────────────────────────────────┐   │
-│  │ context/ (pacote)  │  │            providers/                  │   │
-│  │  builder.py        │  │  OpenAI │ Gemini │ Anthropic │ ...    │   │
-│  │   (skills+rules+   │  └──────────────────────────────────────┘   │
-│  │    AGENTS/DESIGN)  │                                              │
-│  │  references.py     │  ┌──────────────────────────────────────┐   │
-│  │   (@file/@url/...) │  │            tools/                     │   │
-│  │  breakdown.py      │  │  io_tools │ math_tools │             │   │
-│  │   (/context)       │  │  multi_agent (subagentes)           │   │
-│  │  mcp.py            │  └──────────────────────────────────────┘   │
-│  │   (MCP client)     │                                              │
-│  └────────────────────┘                                              │
-│  ┌────────────────────┐                                              │
-│  │ memory.py          │  (AgentMemory — SQLite FTS5)                │
-│  └────────────────────┘                                              │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph ENTRY["🚪 Entrada & Orquestração"]
+        MAIN["main.py<br/>chama run_cli()"]
+        CLI["cli.py<br/>run_cli(): argparse + orquestração de sessão<br/>ConsoleAgentListener (UI Rich)"]
+    end
+
+    subgraph CORE["🤖 Núcleo do Agente (agent.py)"]
+        AGENT["Agent<br/>loop ReAct"]
+        LISTENER["AgentListener<br/>(classe base no-op)"]
+        SYSP["SYSTEM_PROMPT<br/>+ interceptação de ferramentas especiais"]
+        AGENT --- LISTENER
+        AGENT --- SYSP
+    end
+
+    subgraph CTX["🧩 Contexto Dinâmico (context/)"]
+        BUILDER["builder.py<br/>ContextBuilder: compila o system prompt<br/>(skills + rules + AGENTS.md + DESIGN.md)"]
+        REFS["references.py<br/>@file / @url / @diff / @staged"]
+        BREAK["breakdown.py<br/>estimativa de tokens (/context)"]
+        MCPM["mcp.py<br/>MCPManager: cliente MCP (subprocesso stdio)"]
+    end
+
+    subgraph PROV["🔌 Provedores LLM (providers/)"]
+        FACT["__init__.py<br/>get_provider() (factory)"]
+        BASE["base.py<br/>BaseLLMProvider (ABC)<br/>+ retry_with_backoff"]
+        IMPLS["openai.py · gemini.py · anthropic.py<br/>(+ openrouter / ollama / groq / deepseek)"]
+        FACT --> BASE --> IMPLS
+    end
+
+    subgraph TOOLS["🛠️ Ferramentas (tools/)"]
+        REG["__init__.py<br/>REGISTERED_TOOLS → TOOLS_METADATA + TOOLS_MAP"]
+        IO["io_tools.py<br/>list / read / write / patch / search / get_outline"]
+        MATH["math_tools.py<br/>calculate"]
+        WEB["web_tools.py<br/>curl (HTTP)"]
+        MULTI["multi_agent.py<br/>spawn_subagents_parallel<br/>+ CollectingAgentListener"]
+        REG --> IO & MATH & WEB & MULTI
+    end
+
+    subgraph MEM["💾 Persistência (memory.py)"]
+        MEMDB["AgentMemory<br/>SQLite FTS5<br/>search_memory"]
+    end
+
+    subgraph DYN[".agents/ — Contexto Dinâmico"]
+        SKILLS["skills/<br/>diretrizes especializadas<br/>(load/unload_skill)"]
+        RULES["rules/<br/>restrições sempre ativas"]
+        MCPSRV["mcp/*.json<br/>configs de servidores MCP"]
+    end
+
+    MAIN --> CLI
+    CLI --> AGENT
+    AGENT --> BUILDER & REFS & BREAK & MCPM
+    AGENT --> FACT
+    AGENT --> REG
+    AGENT --> MEMDB
+    BUILDER -. lê .-> SKILLS
+    BUILDER -. lê .-> RULES
+    MCPM -. config .-> MCPSRV
+    MEMDB -. handover / checkpoint .-> CLI
 ```
 
 ### Componentes Principais
