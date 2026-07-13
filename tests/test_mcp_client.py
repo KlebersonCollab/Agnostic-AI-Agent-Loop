@@ -51,7 +51,10 @@ def test_mcp_manager_lifecycle(agent, tmp_path):
     
     # Custom run_sync mock to bypass real subprocess/network stdio connection
     def mock_run_sync(coro):
+        import asyncio
         coro_name = str(coro)
+        if asyncio.iscoroutine(coro):
+            coro.close()
         if "list_tools" in coro_name:
             return [mock_tool]
         elif "call_tool" in coro_name:
