@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: Implementing subagent UI enhancement (feature: subagent_ui_enhancement)
-- **Progress**: Implementation complete. Refactored CollectingAgentListener in tools/multi_agent.py with structured and aligned columns. Passed all 59 tests.
+- **Current Task**: None. Feature `mcp_cache_and_fixes` is completed and reviewed.
+- **Progress**: 100% complete. Secure path traversal guard implemented in `io_tools.py`, MCP config pre-caching, invalidation, and dynamic prompt listing implemented in `mcp.py`/`builder.py`, and mock test coroutine warnings resolved. Passed all 62 tests.
 - **Next Steps**:
-  - None. Feature verified and complete.
+  - Await next feature requirements from user.
 
 ## 💡 Decisions Log
+- **2026-07-13 - MCP Caching & Security Fixes**: Plan and specify security hardening of path checks, caching/monitoring of MCP config files, and resolving mock coroutine warnings. (Completed)
 - **2026-07-10 - Context Reference Injection**: Decide to implement prompt-level `@file`, `@url`, `@diff`, `@staged` parsing to match Hermes Agent style context injection. (Completed)
 - **2026-07-10 - Context Folder Refactoring**: Decide to organize context modules under a new Python package `context/` (containing `context/builder.py` and `context/references.py`) to keep the codebase modular. (Completed)
 - **2026-07-10 - Context Breakdown display**: Decide to implement a `/context` slash command in `cli.py` that calculates and displays the token usage breakdown in a beautiful colored Rich table. (Completed)
