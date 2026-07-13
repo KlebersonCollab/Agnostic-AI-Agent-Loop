@@ -248,6 +248,31 @@ class ContextBuilder:
                 rule_content = self.rules_cache[rule_name]
                 prompt_parts.append(f"### Rule: {rule_name}\n{rule_content}")
                 
+        # Available MCP Servers (Configuration metadata only)
+        if hasattr(self, "mcp_manager") and self.mcp_manager:
+            try:
+                self.mcp_manager.check_and_update_cache()
+                available_mcp = self.mcp_manager.get_available_mcp_servers()
+                if available_mcp:
+                    prompt_parts.append("\n## Available Model Context Protocol (MCP) Servers")
+                    prompt_parts.append(
+                        "You have access to the following MCP servers. Only their configurations are cached. "
+                        "To load a server and list its available tools, you MUST call the `load_mcp(server_name)` tool. "
+                        "To expose a tool to your active tools schema, call `load_mcp_tool(server_name, tool_name)`. "
+                        "Once done, call `unload_mcp(server_name)` to free context space."
+                    )
+                    for server_name, details in sorted(available_mcp.items()):
+                        config = details.get("config", {})
+                        servers = config.get("mcpServers", {})
+                        desc = f"MCP server '{server_name}'"
+                        if server_name in servers:
+                            cmd = servers[server_name].get("command", "")
+                            args = servers[server_name].get("args", [])
+                            desc += f" (command: {cmd} {' '.join(str(a) for a in args)})"
+                        prompt_parts.append(f"- **{server_name}**: {desc}")
+            except Exception:
+                pass
+
         # 2. Available Skills (Metadata only)
         if self.skills_cache:
             prompt_parts.append("\n## Available Skills")

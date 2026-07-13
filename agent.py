@@ -67,6 +67,7 @@ class Agent:
         )
         from context.mcp import MCPManager
         self.mcp_manager = MCPManager(agent=self)
+        self.context_builder.mcp_manager = self.mcp_manager
         
         self.history: List[ChatMessage] = [
             ChatMessage(role=MessageRole.SYSTEM, content=self.context_builder.build_prompt())

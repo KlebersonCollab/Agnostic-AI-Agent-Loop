@@ -269,3 +269,39 @@ def test_context_builder_design_md(tmp_path, monkeypatch):
     assert "## Design & Frontend Guidelines (DESIGN.md)" not in prompt
 
 
+def test_context_builder_mcp_servers_integration():
+    from unittest.mock import MagicMock
+    
+    mock_mcp = MagicMock()
+    mock_mcp.get_available_mcp_servers.return_value = {
+        "mock-server": {
+            "config": {
+                "mcpServers": {
+                    "mock-server": {
+                        "command": "echo",
+                        "args": ["hello"]
+                    }
+                }
+            }
+        }
+    }
+    
+    builder = ContextBuilder(
+        base_system_prompt="Base prompt.",
+        skills_dir=TEST_SKILLS_DIR,
+        rules_dir=TEST_RULES_DIR
+    )
+    builder.mcp_manager = mock_mcp
+    
+    prompt = builder.build_prompt()
+    
+    # Verify that MCP servers list is in prompt
+    assert "## Available Model Context Protocol (MCP) Servers" in prompt
+    assert "mock-server" in prompt
+    assert "(command: echo hello)" in prompt
+    
+    mock_mcp.check_and_update_cache.assert_called_once()
+    mock_mcp.get_available_mcp_servers.assert_called_once()
+
+
+
