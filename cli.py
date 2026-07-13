@@ -420,6 +420,7 @@ def run_cli():
                 agent.history = [
                     ChatMessage(role=MessageRole.SYSTEM, content=agent.context_builder.build_prompt())
                 ]
+                agent.hooks.trigger_on_session_clear(agent)
                 console.print("[dim]✓ Conversation history and active context cleared.[/dim]")
                 continue
 
