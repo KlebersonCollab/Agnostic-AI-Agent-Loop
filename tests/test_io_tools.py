@@ -44,9 +44,21 @@ def test_security_access_denied():
     result_write = write_file("../outside_workspace.txt", "data")
     assert "access denied" in result_write.lower()
 
+def test_security_sibling_directory_denied():
+    # Sibling directory path sharing a prefix with workspace root (e.g. /workspace_sibling/file.txt)
+    cwd = os.getcwd()
+    sibling_path = cwd + "_sibling/test_file.txt"
+    
+    result_read = read_file(sibling_path)
+    assert "access denied" in result_read.lower()
+    
+    result_write = write_file(sibling_path, "data")
+    assert "access denied" in result_write.lower()
+
 def test_list_project_files():
     # Should list some python files in the workspace
     files_list = list_project_files()
     assert "main.py" in files_list
     assert "agent.py" in files_list
     assert "[FILE] tools/math_tools.py" in files_list or "tools/math_tools.py" in files_list
+
