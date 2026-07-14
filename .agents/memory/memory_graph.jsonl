@@ -89,3 +89,7 @@
 {"type":"entity","name":"delete_file_tool","entityType":"Feature","observations":["Funcionalidade de exclusão de arquivos localizados estritamente dentro do workspace de forma permanente"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"tools/","to":"delete_file","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"delete_file","to":"delete_file_tool","relationType":"IMPLEMENTS","state":"current"}
+{"type":"entity","name":"execute_command","entityType":"Tool","observations":["Ferramenta para executar comandos shell de forma segura com timeout, blocklist e limitador de output"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"execute_command_tool","entityType":"Feature","observations":["Funcionalidade de execução de comandos restritos no terminal para o agente"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"tools/","to":"execute_command","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"execute_command","to":"execute_command_tool","relationType":"IMPLEMENTS","state":"current"}
