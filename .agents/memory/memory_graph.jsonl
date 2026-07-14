@@ -105,5 +105,9 @@
 {"type":"relation","from":"tools/multi_agent.py","to":"asynchronous_delegation","relationType":"IMPLEMENTS","state":"current"}
 {"type":"relation","from":"memory.py","to":"memguard","relationType":"IMPLEMENTS","state":"current"}
 {"type":"relation","from":"agent.py","to":"asynchronous_delegation","relationType":"SUPPORTED_BY","state":"current"}
+{"type":"entity","name":"memory_lock_fix","entityType":"Feature","observations":["Feature que resolve concorrência e race condition no banco de dados SQLite","Implementa bloqueio global a nível de classe e rollbacks em caso de falha de escrita"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"memory_lock_fix","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"memory.py","to":"memory_lock_fix","relationType":"IMPLEMENTS","state":"current"}
+
 
 

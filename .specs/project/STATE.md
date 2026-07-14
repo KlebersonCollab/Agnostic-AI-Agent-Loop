@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `asynchronous_delegation_and_shared_memory` is completed and reviewed.
-- **Progress**: 100% complete. Implemented Asynchronous Delegation (spawn_subagent_async, check_subagents_status, interrupt_subagent) and Shared Memory category whitelists (MemGuard) with verification tests.
+- **Current Task**: None. Feature `memory_lock_fix` is completed and reviewed.
+- **Progress**: 100% complete. Implemented a class-level global RLock in `AgentMemory`, added connection busy timeouts, and added exception-driven database rollback safety.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-14 - SQLite Concurrency and Transaction Rollback**: Plan, specify, and implement global DB serialization, a 30s connection timeout, and explicit rollbacks on write failures to prevent deadlocks and lock leaks during multi-agent concurrent writes. (Completed)
 - **2026-07-14 - Asynchronous Delegation and MemGuard**: Plan, specify, and implement background subagent threading, cancellation checks, registry tools, and SQLite FTS5 category whitelists for controlled shared memory. (Completed)
 - **2026-07-14 - Agent Orchestrator Mode**: Plan, specify, and implement Orchestrator Mode, defining tool sets for Orchestrator and Worker roles and adding a toggle via `--mode` CLI parameter. (Completed)
 - **2026-07-13 - Execute Command Tool**: Plan, specify, and implement a sandboxed `execute_command` tool inside the workspace, enforcing safety blacklists, timeouts, and output limits. (Completed)
