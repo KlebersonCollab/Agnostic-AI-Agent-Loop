@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `execute_command_tool` is completed and reviewed.
-- **Progress**: 100% complete. Implemented `execute_command` tool with security blocklist, timeout limit, output cap, and rich console logging. Registered the tool and verified with robust tests. Passed all 13 tests.
+- **Current Task**: None. Feature `agent_orchestrator` is completed and reviewed.
+- **Progress**: 100% complete. Implemented Orchestrator Mode with strategic tool isolation, `ORCHESTRATOR_SYSTEM_PROMPT` prompt, new `--mode {orchestrator,classic}` CLI flag, and verification tests.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-14 - Agent Orchestrator Mode**: Plan, specify, and implement Orchestrator Mode, defining tool sets for Orchestrator and Worker roles and adding a toggle via `--mode` CLI parameter. (Completed)
 - **2026-07-13 - Execute Command Tool**: Plan, specify, and implement a sandboxed `execute_command` tool inside the workspace, enforcing safety blacklists, timeouts, and output limits. (Completed)
 - **2026-07-13 - Delete File Tool**: Plan, specify, and implement a secure `delete_file` tool inside the workspace, emitting a console warning upon execution. (Completed)
 - **2026-07-13 - Hooks System**: Plan, specify, and implement dynamic Hooks loading and execution system supporting package/workspace paths, overrides, and 11 distinct event triggers across agent loop, tool execution, and provider API requests. (Completed)

@@ -93,3 +93,9 @@
 {"type":"entity","name":"execute_command_tool","entityType":"Feature","observations":["Funcionalidade de execução de comandos restritos no terminal para o agente"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"tools/","to":"execute_command","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"execute_command","to":"execute_command_tool","relationType":"IMPLEMENTS","state":"current"}
+{"type":"entity","name":"agent_orchestrator","entityType":"Feature","observations":["Feature que implementa o modo Orquestrador no Agnostic AI Agent Loop","Filtra ferramentas em conjuntos estratégicos (Orquestrador) e operacionais (Workers)","Adiciona ORCHESTRATOR_SYSTEM_PROMPT e o argumento CLI --mode"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"--mode","entityType":"CLI Parameter","observations":["Parâmetro CLI com opções: orchestrator (líder estratégico, padrão) ou classic (monolítico operacional)"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"agent_orchestrator","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"cli.py","to":"agent_orchestrator","relationType":"IMPLEMENTS","state":"current"}
+{"type":"relation","from":"agent_orchestrator","to":"--mode","relationType":"DEFINES","state":"current"}
+

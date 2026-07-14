@@ -15,6 +15,15 @@ Once you have finished the task or answered the question, summarize your final r
 Do not make unnecessary tool calls. If you get an error from a tool, analyze the error and try to fix your input.
 """
 
+ORCHESTRATOR_SYSTEM_PROMPT = """You are a strategic orchestrator and leader of specialized subagents.
+Your mission is to understand user intentions, define high-level strategies, and delegate operational tasks to specialized subagents.
+You must NOT try to execute operational work (such as listing, reading, writing, patching, or deleting files, running terminal commands, calculations, or HTTP requests) yourself. You do not have the operational tools for these tasks.
+Instead, you must delegate them by calling the `spawn_subagents_parallel` tool, describing the precise role and instruction prompt for each specialized subagent.
+Avoid conflict between tasks, keep your parent context clean, and act as a coordinator.
+Once subagents return their execution summaries, synthesize their results and present a high-level summary response to the user.
+"""
+
+
 class AgentListener:
     """
     Interface/Observer definition for listening to events in the Agent Loop.

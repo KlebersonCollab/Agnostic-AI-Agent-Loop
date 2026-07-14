@@ -424,3 +424,30 @@ if len(tool_names) != len(set(tool_names)):
 for definition, handler in REGISTERED_TOOLS:
     if not callable(handler):
         raise ImportError(f"Handler for tool '{definition.name}' is not callable.")
+
+ORCHESTRATOR_TOOL_NAMES = {
+    "spawn_subagents_parallel",
+    "search_memory",
+    "load_skill",
+    "unload_skill",
+    "load_mcp",
+    "unload_mcp",
+    "load_mcp_tool",
+    "unload_mcp_tool",
+}
+
+def get_orchestrator_tools():
+    """
+    Returns (tools_metadata, tools_map) containing only orchestrator/delegation/management tools.
+    """
+    orchestrator_tools = [t for t in REGISTERED_TOOLS if t[0].name in ORCHESTRATOR_TOOL_NAMES]
+    metadata = [t[0] for t in orchestrator_tools]
+    t_map = {t[0].name: t[1] for t in orchestrator_tools}
+    return metadata, t_map
+
+def get_classic_tools():
+    """
+    Returns (tools_metadata, tools_map) containing all registered tools.
+    """
+    return TOOLS_METADATA, TOOLS_MAP
+

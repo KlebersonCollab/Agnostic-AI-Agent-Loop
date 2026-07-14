@@ -8,7 +8,13 @@ from typing import Dict, Any
 
 from providers import get_provider
 from agent import Agent, AgentListener
-from tools import TOOLS_METADATA, TOOLS_MAP, set_active_provider
+from tools import (
+    TOOLS_METADATA,
+    TOOLS_MAP,
+    set_active_provider,
+    get_orchestrator_tools,
+    get_classic_tools
+)
 from context.builder import ContextBuilder
 
 from rich.console import Console
@@ -202,6 +208,13 @@ def run_cli():
         help="Maximum loop iterations/steps"
     )
     parser.add_argument(
+        "--mode", 
+        type=str, 
+        choices=["orchestrator", "classic"],
+        default="orchestrator",
+        help="Agent execution mode: 'orchestrator' (strategic leader) or 'classic' (monolithic)"
+    )
+    parser.add_argument(
         "--front-host",
         type=str,
         default="127.0.0.1",
@@ -248,11 +261,21 @@ def run_cli():
     skills_list = list(builder.skills_cache.keys())
     rules_list = list(builder.rules_cache.keys())
 
+    # Select tools and prompt based on execution mode
+    if args.mode == "orchestrator":
+        active_tools_metadata, active_tools_map = get_orchestrator_tools()
+        from agent import ORCHESTRATOR_SYSTEM_PROMPT
+        active_system_prompt = ORCHESTRATOR_SYSTEM_PROMPT
+    else:
+        active_tools_metadata, active_tools_map = get_classic_tools()
+        from agent import SYSTEM_PROMPT
+        active_system_prompt = SYSTEM_PROMPT
+
     # Welcome Banner in Panel
     welcome_text = """
 [bold magenta]🤖 Welcome to the Agnostic AI Agent Loop![/bold magenta]
 
-[dim]Active Provider:[/dim] [bold blue]{provider}[/bold blue] | [dim]Model:[/dim] [bold green]{model}[/bold green]
+[dim]Active Provider:[/dim] [bold blue]{provider}[/bold blue] | [dim]Model:[/dim] [bold green]{model}[/bold green] | [dim]Mode:[/dim] [bold yellow]{mode}[/bold yellow]
 [dim]Tools available:[/dim] [yellow]{tools}[/yellow]
 [dim]Skills available:[/dim] [cyan]{skills}[/cyan]
 [dim]Rules active:[/dim] [magenta]{rules}[/magenta]
@@ -261,7 +284,8 @@ def run_cli():
         Align.center(welcome_text.format(
             provider=args.provider,
             model=args.model,
-            tools=", ".join(TOOLS_MAP.keys()),
+            mode=args.mode.upper(),
+            tools=", ".join(active_tools_map.keys()),
             skills=", ".join(skills_list) if skills_list else "None",
             rules=", ".join(rules_list) if rules_list else "None"
         )),
@@ -343,10 +367,11 @@ def run_cli():
     listener = ConsoleAgentListener()
     agent = Agent(
         provider=provider,
-        tools=TOOLS_METADATA,
-        tools_map=TOOLS_MAP,
+        tools=active_tools_metadata,
+        tools_map=active_tools_map,
         listener=listener,
-        max_steps=args.max_steps
+        max_steps=args.max_steps,
+        system_prompt=active_system_prompt
     )
 
     is_interactive = (args.prompt is None)
