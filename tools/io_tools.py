@@ -233,3 +233,36 @@ def get_outline(filename: str) -> str:
         return f"Error parsing Python syntax in '{filename}': {se}"
     except Exception as e:
         return f"Error getting outline for '{filename}': {e}"
+
+
+def delete_file(filename: str) -> str:
+    """
+    Permanently deletes a file inside the project workspace directory.
+    Prints a warning to the console to ensure responsibility.
+    """
+    try:
+        if not _is_safe_path(filename):
+            return "Error: Access denied. Cannot delete files outside the project directory."
+        abs_path = os.path.abspath(filename)
+
+        if not os.path.exists(abs_path):
+            return f"Error: File '{filename}' does not exist."
+            
+        if os.path.isdir(abs_path):
+            return f"Error: Target '{filename}' is a directory. delete_file only supports files."
+
+        with _file_write_lock:
+            os.remove(abs_path)
+            
+        # Log responsible warning to the developer console
+        from rich.console import Console
+        console = Console()
+        console.print(f"[bold red]⚠️  [File Deletion][/bold red] File '{filename}' has been permanently deleted.")
+        
+        return (
+            f"Success: File '{filename}' was successfully deleted. "
+            "[WARNING: This action is permanent and cannot be undone. "
+            "Ensure that this deletion does not break dependencies or leave orphan imports in the codebase.]"
+        )
+    except Exception as e:
+        return f"Error deleting file '{filename}': {e}"

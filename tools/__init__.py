@@ -195,6 +195,23 @@ REGISTERED_TOOLS = [
     ),
     (
         ToolDefinition(
+            name="delete_file",
+            description="Permanently deletes a file inside the project workspace directory. Warns of deletion responsibly.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "filename": {
+                        "type": "string",
+                        "description": "The relative path of the file to delete, e.g., 'temp.txt'"
+                    }
+                },
+                "required": ["filename"]
+            }
+        ),
+        io_tools.delete_file
+    ),
+    (
+        ToolDefinition(
             name="search_grep",
             description="Searches for a query string or regex pattern recursively in the workspace files. Use this to locate functions, classes, imports, or variable usage.",
             parameters={

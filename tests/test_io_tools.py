@@ -62,3 +62,31 @@ def test_list_project_files():
     assert "agent.py" in files_list
     assert "[FILE] tools/math_tools.py" in files_list or "tools/math_tools.py" in files_list
 
+
+def test_delete_file():
+    from tools.io_tools import delete_file
+    test_file = "test_delete_temp.txt"
+    
+    try:
+        # 1. Test deleting non-existent file
+        res_non = delete_file(test_file)
+        assert "does not exist" in res_non.lower()
+        
+        # 2. Test path safety outside workspace
+        res_unsafe = delete_file("../unsafe_delete.txt")
+        assert "access denied" in res_unsafe.lower()
+        
+        # 3. Test directory delete rejection
+        res_dir = delete_file("tools")
+        assert "is a directory" in res_dir.lower()
+        
+        # 4. Test successful delete
+        write_file(test_file, "data")
+        assert os.path.exists(test_file)
+        res_del = delete_file(test_file)
+        assert "successfully deleted" in res_del.lower()
+        assert not os.path.exists(test_file)
+    finally:
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
