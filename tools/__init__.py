@@ -212,6 +212,23 @@ REGISTERED_TOOLS = [
     ),
     (
         ToolDefinition(
+            name="execute_command",
+            description="Executes a shell command in a sandboxed/restricted environment inside the project directory.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The command line string to execute, e.g. 'pytest' or 'ls -la'."
+                    }
+                },
+                "required": ["command"]
+            }
+        ),
+        io_tools.execute_command
+    ),
+    (
+        ToolDefinition(
             name="search_grep",
             description="Searches for a query string or regex pattern recursively in the workspace files. Use this to locate functions, classes, imports, or variable usage.",
             parameters={

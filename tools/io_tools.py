@@ -2,6 +2,7 @@ import os
 import re
 import ast
 import threading
+import subprocess
 from typing import Optional
 
 # Thread safety lock for writing/modifying operations
@@ -266,3 +267,53 @@ def delete_file(filename: str) -> str:
         )
     except Exception as e:
         return f"Error deleting file '{filename}': {e}"
+
+
+def execute_command(command: str) -> str:
+    """
+    Executes a shell command inside the project workspace directory in a sandboxed/restricted environment.
+    Enforces a timeout, prevents execution of forbidden system-level commands, and caps output size.
+    """
+    forbidden_terms = [
+        "sudo", "rm -rf /", "mkfs", "dd ", "shutdown", "reboot", "poweroff",
+        "/etc/passwd", "/etc/shadow", "~/.ssh", ".env"
+    ]
+    command_clean = command.strip()
+    if any(term in command_clean.lower() for term in forbidden_terms):
+        return "Error: Command contains forbidden/unsafe terms or patterns."
+
+    workspace = os.getcwd()
+    
+    # Log command execution to developer console
+    from rich.console import Console
+    console = Console()
+    console.print(f"[bold yellow]💻 [Shell Command][/bold yellow] Executing: {command_clean}")
+
+    try:
+        result = subprocess.run(
+            command_clean,
+            shell=True,
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        output = result.stdout
+        if result.stderr:
+            output += "\n" + result.stderr
+            
+        output = output.strip()
+        if not output:
+            output = f"[Command exited with code {result.returncode} and produced no output]"
+            
+        # Truncate response to prevent context window bloat
+        max_chars = 30000
+        if len(output) > max_chars:
+            output = output[:max_chars] + f"\n\n[... Output truncated. Total length: {len(output)} characters]"
+            
+        return output
+    except subprocess.TimeoutExpired:
+        return "Error: Command timed out after 30 seconds of execution."
+    except Exception as e:
+        return f"Error executing command: {e}"

@@ -90,3 +90,26 @@ def test_delete_file():
         if os.path.exists(test_file):
             os.remove(test_file)
 
+
+def test_execute_command():
+    from tools.io_tools import execute_command
+    import pytest
+    
+    # 1. Test successful execution of a simple command
+    res_success = execute_command('echo "hello world"')
+    assert "hello world" in res_success.lower()
+
+    # 2. Test execution of a command with forbidden terms
+    res_unsafe = execute_command('sudo apt-get update')
+    assert "error" in res_unsafe.lower()
+    assert "forbidden" in res_unsafe.lower()
+    
+    # 3. Test timeout handling
+    from unittest.mock import patch
+    import subprocess
+    
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="sleep 100", timeout=30)
+        res_timeout = execute_command("sleep 100")
+        assert "timed out" in res_timeout.lower()
+
