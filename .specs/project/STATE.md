@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `hooks_system` is completed and reviewed.
-- **Progress**: 100% complete. Implemented HooksManager dynamic loader with package and workspace paths, overrides, 11 event triggers, and integration with Agent loop and CLI. Passed all 6 tests.
+- **Current Task**: None. Feature `delete_file_tool` is completed and reviewed.
+- **Progress**: 100% complete. Implemented `delete_file` tool inside the project workspace with safe path checks and terminal warning message. Registered the tool and verified with robust tests. Passed all 12 tests.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-13 - Delete File Tool**: Plan, specify, and implement a secure `delete_file` tool inside the workspace, emitting a console warning upon execution. (Completed)
 - **2026-07-13 - Hooks System**: Plan, specify, and implement dynamic Hooks loading and execution system supporting package/workspace paths, overrides, and 11 distinct event triggers across agent loop, tool execution, and provider API requests. (Completed)
 - **2026-07-13 - MCP Caching & Security Fixes**: Plan and specify security hardening of path checks, caching/monitoring of MCP config files, and resolving mock coroutine warnings. (Completed)
 - **2026-07-10 - Context Reference Injection**: Decide to implement prompt-level `@file`, `@url`, `@diff`, `@staged` parsing to match Hermes Agent style context injection. (Completed)
