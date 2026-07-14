@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `agent_orchestrator` is completed and reviewed.
-- **Progress**: 100% complete. Implemented Orchestrator Mode with strategic tool isolation, `ORCHESTRATOR_SYSTEM_PROMPT` prompt, new `--mode {orchestrator,classic}` CLI flag, and verification tests.
+- **Current Task**: None. Feature `asynchronous_delegation_and_shared_memory` is completed and reviewed.
+- **Progress**: 100% complete. Implemented Asynchronous Delegation (spawn_subagent_async, check_subagents_status, interrupt_subagent) and Shared Memory category whitelists (MemGuard) with verification tests.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-14 - Asynchronous Delegation and MemGuard**: Plan, specify, and implement background subagent threading, cancellation checks, registry tools, and SQLite FTS5 category whitelists for controlled shared memory. (Completed)
 - **2026-07-14 - Agent Orchestrator Mode**: Plan, specify, and implement Orchestrator Mode, defining tool sets for Orchestrator and Worker roles and adding a toggle via `--mode` CLI parameter. (Completed)
 - **2026-07-13 - Execute Command Tool**: Plan, specify, and implement a sandboxed `execute_command` tool inside the workspace, enforcing safety blacklists, timeouts, and output limits. (Completed)
 - **2026-07-13 - Delete File Tool**: Plan, specify, and implement a secure `delete_file` tool inside the workspace, emitting a console warning upon execution. (Completed)

@@ -61,7 +61,8 @@ class Agent:
         listener: Optional[AgentListener] = None,
         max_steps: int = 15,
         write_checkpoint_file: bool = True,
-        system_prompt: str = SYSTEM_PROMPT
+        system_prompt: str = SYSTEM_PROMPT,
+        allowed_memory_categories: Optional[List[str]] = None
     ):
         self.provider = provider
         self.tools = tools
@@ -69,6 +70,8 @@ class Agent:
         self.listener = listener
         self.max_steps = max_steps
         self.write_checkpoint_file = write_checkpoint_file
+        self.allowed_memory_categories = allowed_memory_categories
+        self.cancelled = False
         
         from context.builder import ContextBuilder
         self.context_builder = ContextBuilder(
@@ -115,6 +118,12 @@ class Agent:
         self.handover_checkpoint = None
 
         for step in range(1, self.max_steps + 1):
+            if self.cancelled:
+                self.exit_reason = "CANCELLED"
+                if self.listener:
+                    self.listener.on_error("Agent execution cancelled.")
+                break
+
             self.hooks.trigger_pre_step(self, step)
             if self.listener:
                 self.listener.on_step_start(step, self.max_steps)
@@ -301,7 +310,11 @@ class Agent:
                 query = tool_args.get("query")
                 category = tool_args.get("category")
                 try:
-                    search_results = self.memory.search(query, category)
+                    search_results = self.memory.search(
+                        query, 
+                        category=category, 
+                        allowed_categories=self.allowed_memory_categories
+                    )
                     if not search_results:
                         result = f"No memories found matching '{query}'."
                     else:

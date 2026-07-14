@@ -406,6 +406,67 @@ REGISTERED_TOOLS = [
             }
         ),
         lambda server_name, tool_name: "Success: MCP tool unloaded (intercepted)"
+    ),
+    (
+        ToolDefinition(
+            name="spawn_subagent_async",
+            description="Spawns a specialized subagent in the background (asynchronously) to run a task without blocking your thread. Returns a JSON string containing the spawned subagent_id.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "role_description": {
+                        "type": "string",
+                        "description": "The expertise/role of the subagent, e.g. 'File Reader Specialist' or 'Code Refactoring Expert'."
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "The specific query, task, or analysis prompt for this subagent."
+                    },
+                    "allowed_categories": {
+                        "type": "array",
+                        "description": "Optional list of memory categories the subagent is allowed to search, e.g. ['thought', 'tool_output'].",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": ["role_description", "prompt"]
+            }
+        ),
+        multi_agent.spawn_subagent_async
+    ),
+    (
+        ToolDefinition(
+            name="check_subagents_status",
+            description="Checks the status, logs, and final answer of one or all background subagents.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "subagent_id": {
+                        "type": "string",
+                        "description": "Optional ID of a specific background subagent. If omitted, returns the status of all subagents."
+                    }
+                }
+            }
+        ),
+        multi_agent.check_subagents_status
+    ),
+    (
+        ToolDefinition(
+            name="interrupt_subagent",
+            description="Interrupts/cancels a running background subagent.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "subagent_id": {
+                        "type": "string",
+                        "description": "The ID of the background subagent to interrupt."
+                    }
+                },
+                "required": ["subagent_id"]
+            }
+        ),
+        multi_agent.interrupt_subagent
     )
 ]
 
@@ -427,6 +488,9 @@ for definition, handler in REGISTERED_TOOLS:
 
 ORCHESTRATOR_TOOL_NAMES = {
     "spawn_subagents_parallel",
+    "spawn_subagent_async",
+    "check_subagents_status",
+    "interrupt_subagent",
     "search_memory",
     "load_skill",
     "unload_skill",

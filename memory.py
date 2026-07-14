@@ -180,7 +180,13 @@ class AgentMemory:
             
             self.conn.commit()
 
-    def search(self, query: str, category: str = None, limit: int = 5) -> List[Dict[str, Any]]:
+    def search(
+        self, 
+        query: str, 
+        category: str = None, 
+        limit: int = 5, 
+        allowed_categories: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
         """
         Searches the FTS virtual index matching query terms,
         ordered by rank (relevance BM25) and session recency.
@@ -205,8 +211,16 @@ class AgentMemory:
             params = [query]
             
             if category:
+                if allowed_categories is not None and category not in allowed_categories:
+                    return []
                 sql += " AND f.category = ?"
                 params.append(category)
+            elif allowed_categories is not None:
+                if not allowed_categories:
+                    return []
+                placeholders = ",".join(["?"] * len(allowed_categories))
+                sql += f" AND f.category IN ({placeholders})"
+                params.extend(allowed_categories)
                 
             # Order by BM25 relevance score and break ties using timestamp DESC
             sql += " ORDER BY rank ASC, s.timestamp DESC LIMIT ?"

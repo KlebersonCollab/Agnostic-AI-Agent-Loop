@@ -98,4 +98,12 @@
 {"type":"relation","from":"agnostic-agent","to":"agent_orchestrator","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"cli.py","to":"agent_orchestrator","relationType":"IMPLEMENTS","state":"current"}
 {"type":"relation","from":"agent_orchestrator","to":"--mode","relationType":"DEFINES","state":"current"}
+{"type":"entity","name":"asynchronous_delegation","entityType":"Feature","observations":["Feature que permite delegação assíncrona de subagentes em background threads","Adiciona as ferramentas spawn_subagent_async, check_subagents_status e interrupt_subagent"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"memguard","entityType":"Feature","observations":["Implementa isolamento de memória compartilhada limitando categorias de busca do FTS5 via whitelists na pesquisa de banco"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"asynchronous_delegation","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"agnostic-agent","to":"memguard","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"tools/multi_agent.py","to":"asynchronous_delegation","relationType":"IMPLEMENTS","state":"current"}
+{"type":"relation","from":"memory.py","to":"memguard","relationType":"IMPLEMENTS","state":"current"}
+{"type":"relation","from":"agent.py","to":"asynchronous_delegation","relationType":"SUPPORTED_BY","state":"current"}
+
 

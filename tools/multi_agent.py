@@ -1,5 +1,7 @@
 import json
-from typing import Dict, Any, List
+import uuid
+import threading
+from typing import Dict, Any, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from providers import BaseLLMProvider
@@ -204,3 +206,137 @@ def spawn_subagents_parallel(tasks: List[Dict[str, str]]) -> str:
         })
 
     return json.dumps(report, indent=2, ensure_ascii=False)
+
+
+class BackgroundSubagentRegistry:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.subagents = {}
+
+    def register(self, subagent_id: str, agent: Agent, thread: threading.Thread, listener: CollectingAgentListener):
+        with self.lock:
+            self.subagents[subagent_id] = {
+                "agent": agent,
+                "thread": thread,
+                "listener": listener,
+                "status": "running",
+                "final_answer": ""
+            }
+
+    def update_status(self, subagent_id: str, status: str, final_answer: str = ""):
+        with self.lock:
+            if subagent_id in self.subagents:
+                self.subagents[subagent_id]["status"] = status
+                if final_answer:
+                    self.subagents[subagent_id]["final_answer"] = final_answer
+
+    def get(self, subagent_id: str) -> Optional[Dict[str, Any]]:
+        with self.lock:
+            return self.subagents.get(subagent_id)
+
+    def get_all(self) -> Dict[str, Any]:
+        with self.lock:
+            return {
+                k: {
+                    "status": v["status"],
+                    "logs": list(v["listener"].logs),
+                    "final_answer": v["final_answer"]
+                }
+                for k, v in self.subagents.items()
+            }
+
+
+_bg_registry = BackgroundSubagentRegistry()
+
+
+def spawn_subagent_async(role_description: str, prompt: str, allowed_categories: List[str] = None) -> str:
+    """
+    Spawns a single specialized subagent in the background (asynchronously).
+    Returns a JSON string containing the spawned subagent_id.
+    """
+    if not _active_provider:
+        return json.dumps({"error": "Active LLM Provider is not set."})
+
+    from tools import TOOLS_METADATA, TOOLS_MAP
+    exclude_tools = {"spawn_subagents_parallel", "spawn_subagent_async", "check_subagents_status", "interrupt_subagent"}
+    subagent_tools_map = {k: v for k, v in TOOLS_MAP.items() if k not in exclude_tools}
+    subagent_tools_metadata = [t for t in TOOLS_METADATA if t.name not in exclude_tools]
+
+    subagent_id = f"subagent_{uuid.uuid4().hex[:8]}"
+    color_code = "cyan"
+    sub_listener = CollectingAgentListener(role_description, color_code)
+    sub_system_prompt = f"You are a specialized subagent. Your role is: {role_description}\n" + SYSTEM_PROMPT
+
+    agent = Agent(
+        provider=_active_provider,
+        tools=subagent_tools_metadata,
+        tools_map=subagent_tools_map,
+        listener=sub_listener,
+        max_steps=10,
+        write_checkpoint_file=False,
+        system_prompt=sub_system_prompt,
+        allowed_memory_categories=allowed_categories
+    )
+
+    def thread_target():
+        try:
+            agent.run(prompt)
+            final_answer = ""
+            for msg in reversed(agent.history):
+                if msg.role == "assistant" and msg.content and not msg.tool_calls:
+                    final_answer = msg.content
+                    break
+            if not final_answer and agent.history:
+                for msg in reversed(agent.history):
+                    if msg.role == "assistant" and msg.content:
+                        final_answer = msg.content
+                        break
+            if agent.exit_reason == "CANCELLED":
+                _bg_registry.update_status(subagent_id, "cancelled")
+            else:
+                _bg_registry.update_status(subagent_id, "completed", final_answer or "No summary response generated.")
+        except Exception as e:
+            _bg_registry.update_status(subagent_id, "failed", f"Error: Thread crashed: {e}")
+
+    thread = threading.Thread(target=thread_target, daemon=True)
+    _bg_registry.register(subagent_id, agent, thread, sub_listener)
+    thread.start()
+
+    console.print(f"\n[bold magenta]👥 [Async Orquestrador][/bold magenta] Spawned background subagent [bold cyan]{subagent_id}[/bold cyan] for role: '{role_description}'")
+    return json.dumps({"subagent_id": subagent_id, "status": "running"})
+
+
+def check_subagents_status(subagent_id: str = None) -> str:
+    """
+    Checks the status and logs of one or all background subagents.
+    Returns a JSON string with the status details.
+    """
+    if subagent_id:
+        info = _bg_registry.get(subagent_id)
+        if not info:
+            return json.dumps({"error": f"Subagent '{subagent_id}' not found."})
+        return json.dumps({
+            "subagent_id": subagent_id,
+            "status": info["status"],
+            "logs": list(info["listener"].logs),
+            "final_answer": info["final_answer"]
+        }, indent=2, ensure_ascii=False)
+    
+    return json.dumps(_bg_registry.get_all(), indent=2, ensure_ascii=False)
+
+
+def interrupt_subagent(subagent_id: str) -> str:
+    """
+    Interrupts a running background subagent.
+    Returns a confirmation message.
+    """
+    info = _bg_registry.get(subagent_id)
+    if not info:
+        return json.dumps({"error": f"Subagent '{subagent_id}' not found."})
+    
+    if info["status"] == "running":
+        info["agent"].cancelled = True
+        return json.dumps({"subagent_id": subagent_id, "message": "Cancellation signal sent."})
+    else:
+        return json.dumps({"subagent_id": subagent_id, "message": f"Subagent is already in state: {info['status']}"})
+
