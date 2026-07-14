@@ -85,3 +85,7 @@
 {"type":"entity","name":"hooks_system","entityType":"Feature","observations":["Sistema de 11 triggers cobrindo ciclo de vida do agente, chamadas à LLM e execução de tools"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"agnostic-agent","to":"hooks/","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"hooks/","to":"hooks_system","relationType":"IMPLEMENTS","state":"current"}
+{"type":"entity","name":"delete_file","entityType":"Tool","observations":["Ferramenta para deletar arquivos com validação de segurança de path e aviso em console"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"delete_file_tool","entityType":"Feature","observations":["Funcionalidade de exclusão de arquivos localizados estritamente dentro do workspace de forma permanente"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"tools/","to":"delete_file","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"delete_file","to":"delete_file_tool","relationType":"IMPLEMENTS","state":"current"}
