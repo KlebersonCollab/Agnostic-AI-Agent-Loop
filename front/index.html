@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -29,10 +29,70 @@
       font-family: monospace !important;
       white-space: pre-line !important;
     }
+
+    /* Linear design-system tokens (DESIGN.md) */
+    [data-bs-theme="dark"] {
+      --bs-body-bg: #010102;        /* canvas */
+      --bs-body-color: #f7f8f8;     /* ink */
+      --bs-border-color: #23252a;   /* hairline */
+      --bs-secondary-color: #8a8f98;/* ink-subtle */
+      --bs-tertiary-color: #62666d; /* ink-tertiary */
+      --bs-emphasis-color: #f7f8f8; /* ink */
+      --bs-dark: #010102;           /* canvas (navbar) */
+    }
+    body {
+      background: #010102;
+      color: #f7f8f8;
+      font-family: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+    }
+    .navbar {
+      background: #010102 !important;
+      min-height: 56px;
+    }
+    .navbar-brand, h1, h6 {
+      letter-spacing: -0.02em;
+    }
+    .card {
+      background: #0f1011;          /* surface-1 */
+      border: 1px solid #23252a;    /* hairline */
+      border-radius: 12px;          /* lg */
+    }
+    .form-control, .form-select {
+      background: #0f1011;          /* surface-1 */
+      color: #f7f8f8;               /* ink */
+      border-color: #23252a;        /* hairline */
+      border-radius: 8px;           /* md */
+    }
+    .form-control:focus, .form-select:focus {
+      background: #0f1011;
+      color: #f7f8f8;
+      border-color: #5e69d1;        /* primary-focus */
+      box-shadow: 0 0 0 .25rem rgba(94, 105, 209, .5);
+    }
+    .btn-secondary {
+      background: #0f1011;          /* surface-1 */
+      color: #f7f8f8;               /* ink */
+      border-color: #23252a;        /* hairline */
+      border-radius: 8px;           /* md */
+    }
+    .btn-secondary:hover, .btn-secondary:focus {
+      background: #141516;          /* surface-2 */
+      color: #f7f8f8;
+      border-color: #34343a;        /* hairline-strong */
+    }
+    .badge {
+      background: #141516;          /* surface-2 */
+      color: #d0d6e0;               /* ink-muted */
+      border-radius: 9999px;        /* pill */
+    }
+    .container-fluid {
+      max-width: 1280px;
+      margin-inline: auto;
+    }
   </style>
 </head>
-<body class="bg-body-tertiary">
-  <nav class="navbar navbar-dark bg-dark border-bottom">
+<body>
+  <nav class="navbar sticky-top border-bottom">
     <div class="container-fluid">
       <span class="navbar-brand mb-0 h1">🧠 Agent Memory Graph</span>
       <span class="text-secondary small">agnostic-agent · knowledge graph viewer</span>
@@ -91,7 +151,7 @@
         </select>
       </div>
       <div class="col-4 col-md-1 d-grid">
-        <button id="reset-btn" class="btn btn-sm btn-outline-secondary">Reset</button>
+        <button id="reset-btn" class="btn btn-sm btn-secondary">Reset</button>
       </div>
     </div>
     <div id="status" class="small text-secondary mb-2"></div>
