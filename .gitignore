@@ -17,7 +17,7 @@ checkpoint.json
 checkpoint.json.old
 
 # Local memory database
-.agents/memory.db
+.agents/memory.db*
 
 .playwright-mcp/
 .playwright-mcp/*.*

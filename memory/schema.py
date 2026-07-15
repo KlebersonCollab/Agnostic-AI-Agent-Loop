@@ -56,8 +56,10 @@ def initialize_schema(conn: sqlite3.Connection):
     """Sets up the SQLite database schema and foreign keys."""
     cursor = conn.cursor()
     
-    # Enable Foreign Keys support
+    # Enable Foreign Keys support and WAL mode
     cursor.execute("PRAGMA foreign_keys = ON;")
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.execute("PRAGMA synchronous = NORMAL;")
     
     # Create main tables
     cursor.execute(CREATE_SESSIONS_TABLE)
