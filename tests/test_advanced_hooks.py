@@ -142,4 +142,34 @@ def test_context_pruning(monkeypatch):
     assert mod_messages[2].role == MessageRole.SYSTEM
     assert mod_messages[-1].content.startswith("Response 14")
 
+def test_self_healing():
+    healer = load_hook("on_tool_error/self_healing.py")
+    
+    # 1. FileNotFoundError
+    res = healer.handler("read_file", {"AbsolutePath": "missing.txt"}, FileNotFoundError("No such file"))
+    assert "not found" in res
+    assert "Action" in res
+    
+    # 2. PermissionError
+    res = healer.handler("write_file", {"AbsolutePath": "locked.txt"}, PermissionError("Permission denied"))
+    assert "Permission denied" in res
+    assert "Action" in res
+    
+    # 3. ModuleNotFoundError
+    res = healer.handler("run_command", {}, ModuleNotFoundError("No module named ruff"))
+    assert "Missing required Python module" in res
+    
+    # 4. TypeError
+    res = healer.handler("calculate", {"x": "a"}, TypeError("Unsupported operand type"))
+    assert "mismatched signature" in res
+    
+    # 5. ValueError
+    res = healer.handler("calculate", {"expression": "invalid"}, ValueError("invalid expression"))
+    assert "invalid value" in res
+
+    # 6. General unmapped exception
+    res = healer.handler("calculate", {}, RuntimeError("Something went wrong"))
+    assert res is None
+
+
 
