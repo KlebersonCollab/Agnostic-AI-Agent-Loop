@@ -7,45 +7,8 @@ from memory import AgentMemory
 from context.references import preprocess_context_references
 from concurrent.futures import ThreadPoolExecutor
 
-SYSTEM_PROMPT = """You are a helpful autonomous agent.
-You solve tasks step-by-step.
-Before using any tool, always think about why you need it and state your reasoning clearly in your text response.
-When working with files or code, always run `list_project_files` first to discover the exact workspace layout and file paths. Do not guess filenames or directory structures.
-Once you have finished the task or answered the question, summarize your final response to the user.
-Do not make unnecessary tool calls. If you get an error from a tool, analyze the error and try to fix your input.
-"""
-
-ORCHESTRATOR_SYSTEM_PROMPT = """You are a strategic orchestrator and leader of specialized subagents.
-Your mission is to understand user intentions, define high-level strategies, and delegate operational tasks to specialized subagents.
-You must NOT try to execute operational work (such as listing, reading, writing, patching, or deleting files, running terminal commands, calculations, or HTTP requests) yourself. You do not have the operational tools for these tasks.
-Instead, you must delegate them by calling the `spawn_subagents_parallel` tool, describing the precise role and instruction prompt for each specialized subagent.
-Avoid conflict between tasks, keep your parent context clean, and act as a coordinator.
-Once subagents return their execution summaries, synthesize their results and present a high-level summary response to the user.
-"""
-
-
-class AgentListener:
-    """
-    Interface/Observer definition for listening to events in the Agent Loop.
-    Allows decoupling UI presentation (Console, Web, GUI, Logs) from the Agent logic.
-    """
-    def on_step_start(self, step: int, max_steps: int):
-        pass
-
-    def on_thought(self, thought: str, is_final: bool = False):
-        pass
-
-    def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
-        pass
-
-    def on_tool_output(self, name: str, result: str):
-        pass
-
-    def on_error(self, message: str):
-        pass
-
-    def on_complete(self):
-        pass
+from agent.listener import AgentListener
+from agent.prompts import SYSTEM_PROMPT
 
 
 class Agent:
@@ -329,7 +292,7 @@ class Agent:
                                 f"Category: {res['category']}\n"
                                 f"Original Task: {res['task_prompt']}\n"
                                 f"Content:\n{res['content']}\n"
-                            )
+                             )
                         result = "\n".join(formatted_results)
                 except Exception as e:
                     custom_err = self.hooks.trigger_on_tool_error(tool_name, tool_args, e)
@@ -373,4 +336,3 @@ class Agent:
         )
         response_msg = self.hooks.trigger_post_api_request(response_msg)
         return response_msg
-
