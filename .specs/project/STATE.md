@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `memory_lock_fix` is completed and reviewed.
-- **Progress**: 100% complete. Implemented a class-level global RLock in `AgentMemory`, added connection busy timeouts, and added exception-driven database rollback safety.
+- **Current Task**: None. Feature `cli_refactoring` is completed and reviewed.
+- **Progress**: 100% complete. Modularized `cli.py` by extracting rendering, commands, and runner loops into the new `tui/` package.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-15 - CLI Modularization & TUI separation**: Extract TUI concerns (`ConsoleAgentListener`, welcome banner, runner loops, slash commands) from `cli.py` to a dedicated `tui/` package to improve modularity and single responsibility. (Completed)
 - **2026-07-14 - SQLite Concurrency and Transaction Rollback**: Plan, specify, and implement global DB serialization, a 30s connection timeout, and explicit rollbacks on write failures to prevent deadlocks and lock leaks during multi-agent concurrent writes. (Completed)
 - **2026-07-14 - Asynchronous Delegation and MemGuard**: Plan, specify, and implement background subagent threading, cancellation checks, registry tools, and SQLite FTS5 category whitelists for controlled shared memory. (Completed)
 - **2026-07-14 - Agent Orchestrator Mode**: Plan, specify, and implement Orchestrator Mode, defining tool sets for Orchestrator and Worker roles and adding a toggle via `--mode` CLI parameter. (Completed)

@@ -2,15 +2,10 @@ import os
 import sys
 import json
 import argparse
-import time
-import re
-from typing import Dict, Any
 
 from providers import get_provider
-from agent import Agent, AgentListener
+from agent import Agent
 from tools import (
-    TOOLS_METADATA,
-    TOOLS_MAP,
     set_active_provider,
     get_orchestrator_tools,
     get_classic_tools
@@ -20,153 +15,15 @@ from context.builder import ContextBuilder
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
-from rich.syntax import Syntax
-from rich.table import Table
-from rich.rule import Rule
-from rich.align import Align
-from rich.text import Text
-from rich.markup import escape
+
+from tui import (
+    ConsoleAgentListener,
+    print_welcome_banner,
+    run_one_shot,
+    run_interactive_loop
+)
 
 console = Console()
-
-class ConsoleAgentListener(AgentListener):
-    """
-    Console/Terminal implementation of the AgentListener using Rich.
-    Provides a beautiful, structured CLI dashboard with live status indicators.
-    """
-    def __init__(self):
-        self.status = None
-        self.step_start_time = None
-        self.current_tool_call_formatted = None
-        self.verbose = False
-
-    def _stop_status(self):
-        if self.status:
-            self.status.stop()
-            self.status = None
-
-    def on_step_start(self, step: int, max_steps: int):
-        self._stop_status()
-        self.step_start_time = time.monotonic()
-        self.status = console.status("[bold green]Agent is thinking...", spinner="dots")
-        self.status.start()
-
-    def _format_tool_call(self, name: str, arguments: Dict[str, Any]) -> str:
-        import os
-        import json
-        
-        suffix = " (/verbose to expand)" if not self.verbose else ""
-        
-        if name == "list_project_files":
-            path = os.path.abspath(arguments.get("path") or ".")
-            return f"ListDir({path}){suffix}"
-        elif name == "read_file":
-            path = os.path.abspath(arguments.get("filename") or "")
-            return f"Read({path}){suffix}"
-        elif name == "write_file":
-            path = os.path.abspath(arguments.get("filename") or "")
-            if os.path.exists(path):
-                return f"Edit({path}){suffix}"
-            return f"Create({path}){suffix}"
-        elif name == "patch_file" or name == "patch":
-            path = os.path.abspath(arguments.get("filename") or "")
-            return f"Edit({path}){suffix}"
-        elif name == "run_command":
-            cmd = arguments.get("CommandLine") or ""
-            return f"Bash({cmd}){suffix}"
-        elif name == "calculate":
-            expr = arguments.get("expression") or ""
-            return f"Calc({expr})"
-        elif name == "search_grep":
-            pat = arguments.get("Query") or arguments.get("pattern") or ""
-            return f"Grep({pat})"
-        elif name == "search_memory":
-            q = arguments.get("query") or ""
-            return f"SearchMemory({q})"
-        elif name == "spawn_subagents_parallel":
-            tasks = arguments.get("tasks") or []
-            return f"Subagents({len(tasks)} tasks){suffix}"
-        elif name == "load_skill":
-            sk = arguments.get("name") or ""
-            return f"LoadSkill({sk})"
-        elif name == "unload_skill":
-            sk = arguments.get("name") or ""
-            return f"UnloadSkill({sk})"
-        elif name == "manage_task":
-            tid = arguments.get("TaskId") or ""
-            return f"ManageTask(Task: {tid}){suffix}"
-        elif name == "schedule":
-            prompt = arguments.get("Prompt") or ""
-            return f"Schedule({prompt}){suffix}"
-        else:
-            args_str = json.dumps(arguments, ensure_ascii=False)
-            return f"{name}({args_str})"
-
-    def on_thought(self, thought: str, is_final: bool = False):
-        self._stop_status()
-        if is_final:
-            console.print(Markdown(thought))
-            console.print()
-        else:
-            elapsed = 1
-            if self.step_start_time is not None:
-                elapsed = max(1, int(time.monotonic() - self.step_start_time))
-            
-            tokens = (len(thought) + 3) // 4
-            tokens_str = f"{tokens/1000:.1f}k" if tokens >= 1000 else str(tokens)
-            
-            lines = [line.strip() for line in thought.split("\n") if line.strip()]
-            title = lines[0] if lines else "Thinking..."
-            title = re.sub(r'^(#+\s*|-\s*|\*\s*|\d+\.\s*)', '', title).strip()
-            if len(title) > 80:
-                title = title[:77] + "..."
-                
-            console.print(f"[bold dim]▸ Thought for {elapsed}s, {tokens_str} tokens[/bold dim]")
-            console.print(f"  {title}")
-            console.print()
-
-    def on_tool_call(self, name: str, arguments: Dict[str, Any], call_id: str):
-        self._stop_status()
-        formatted = self._format_tool_call(name, arguments)
-        self.current_tool_call_formatted = formatted
-        console.print(f"[bold yellow]● {formatted}...[/bold yellow]", end="\r")
-        import sys
-        sys.stdout.flush()
-
-    def on_tool_output(self, name: str, result: str):
-        self._stop_status()
-        formatted = getattr(self, "current_tool_call_formatted", None) or f"{name}(...)"
-        
-        is_error = result.strip().startswith("Error") or result.strip().startswith("Warning")
-        if is_error:
-            # Overwrite carriage return with bold red line, then newline
-            console.print(f"[bold red]● {formatted} (failed)[/bold red]                       ")
-        else:
-            # Overwrite carriage return with bold green line, then newline
-            console.print(f"[bold green]● {formatted}[/bold green]                            ")
-        self.current_tool_call_formatted = None
-        
-        if self.verbose:
-            try:
-                parsed = json.loads(result)
-                display_content = Syntax(json.dumps(parsed, indent=2, ensure_ascii=False), "json", theme="monokai", background_color="default")
-            except Exception:
-                display_content = Text(result)
-
-            panel = Panel(
-                display_content,
-                title="📥 [bold cyan]Tool Output[/bold cyan]",
-                border_style="cyan",
-                expand=False
-            )
-            console.print(panel)
-
-    def on_error(self, message: str):
-        self._stop_status()
-        console.print(Panel(Text(message), title="❌ Error", border_style="red"))
-
-    def on_complete(self):
-        self._stop_status()
 
 
 def run_cli():
@@ -272,26 +129,14 @@ def run_cli():
         active_system_prompt = SYSTEM_PROMPT
 
     # Welcome Banner in Panel
-    welcome_text = """
-[bold magenta]🤖 Welcome to the Agnostic AI Agent Loop![/bold magenta]
-
-[dim]Active Provider:[/dim] [bold blue]{provider}[/bold blue] | [dim]Model:[/dim] [bold green]{model}[/bold green] | [dim]Mode:[/dim] [bold yellow]{mode}[/bold yellow]
-[dim]Tools available:[/dim] [yellow]{tools}[/yellow]
-[dim]Skills available:[/dim] [cyan]{skills}[/cyan]
-[dim]Rules active:[/dim] [magenta]{rules}[/magenta]
-    """
-    welcome_panel = Panel(
-        Align.center(welcome_text.format(
-            provider=args.provider,
-            model=args.model,
-            mode=args.mode.upper(),
-            tools=", ".join(active_tools_map.keys()),
-            skills=", ".join(skills_list) if skills_list else "None",
-            rules=", ".join(rules_list) if rules_list else "None"
-        )),
-        border_style="magenta"
+    print_welcome_banner(
+        provider_name=args.provider,
+        model_name=args.model,
+        mode=args.mode,
+        tools_list=list(active_tools_map.keys()),
+        skills_list=skills_list,
+        rules_list=rules_list
     )
-    console.print(welcome_panel)
 
     prompt = args.prompt
     is_loop = False
@@ -377,152 +222,10 @@ def run_cli():
     is_interactive = (args.prompt is None)
 
     if not is_interactive:
-        # One-shot execution
-        if is_loop:
-            agent.max_steps = 10000
-            border_color = "red"
-            title_text = "[bold red]🔄 Loop Mode Objective (10000 Steps max):[/bold red]"
-        else:
-            border_color = "cyan"
-            title_text = "[bold cyan]Objective:[/bold cyan]"
-            
-        console.print()
-        console.print(Panel(
-            f"{title_text} {prompt}", 
-            border_style=border_color
-        ))
-        agent.run(prompt)
-        
-        # Clean up checkpoint if completed successfully
-        if agent.exit_reason != "MAX_STEPS_REACHED":
-            if os.path.exists(checkpoint_file):
-                try:
-                    os.remove(checkpoint_file)
-                    console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
-                except Exception:
-                    pass
+        run_one_shot(agent, prompt, is_loop)
     else:
-        # Continuous interactive session
-        first_turn = True
-        while True:
-            # If a checkpoint was detected and approved at startup, execute it on the first turn
-            if first_turn and checkpoint_loaded:
-                console.print()
-                console.print(Panel(
-                    "[bold cyan]Resuming previous task from Handover Checkpoint[/bold cyan]", 
-                    border_style="cyan"
-                ))
-                agent.run(prompt)
-                first_turn = False
-                
-                # Clean up checkpoint if completed successfully
-                if agent.exit_reason != "MAX_STEPS_REACHED":
-                    if os.path.exists(checkpoint_file):
-                        try:
-                            os.remove(checkpoint_file)
-                            console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
-                        except Exception:
-                            pass
-                continue
+        run_interactive_loop(agent, listener, checkpoint_loaded, prompt)
 
-            try:
-                console.print()
-                user_input = console.input("[bold magenta]Agnostic (or '/context', '/verbose', '/clear', '/exit', '/loop') > [/bold magenta]").strip()
-            except (KeyboardInterrupt, EOFError):
-                console.print("\n[bold red]Exiting.[/bold red]")
-                break
 
-            if not user_input:
-                continue
-
-            if user_input.lower() in ("/exit", "/quit", "exit", "quit"):
-                console.print("[bold red]Exiting.[/bold red]")
-                break
-
-            if user_input.lower() in ("/clear", "/reset", "clear", "reset"):
-                from providers import ChatMessage, MessageRole
-                # Reset history to clean system prompt
-                agent.history = [
-                    ChatMessage(role=MessageRole.SYSTEM, content=agent.context_builder.build_prompt())
-                ]
-                agent.hooks.trigger_on_session_clear(agent)
-                console.print("[dim]✓ Conversation history and active context cleared.[/dim]")
-                continue
-
-            if user_input.lower() in ("/verbose", "/outputs", "/v", "verbose", "outputs"):
-                listener.verbose = not listener.verbose
-                status_str = "ENABLED" if listener.verbose else "DISABLED"
-                console.print(f"[dim]✓ Tool output expansion {status_str}.[/dim]")
-                continue
-
-            if user_input.lower() in ("/context", "/c", "context"):
-                from context.breakdown import calculate_context_breakdown
-                bd = calculate_context_breakdown(agent)
-                table = Table(title="📊 Context Window Token Usage Breakdown", show_header=True, header_style="bold magenta")
-                table.add_column("Category", style="cyan")
-                table.add_column("Est. Tokens", justify="right", style="green")
-                table.add_column("Percentage", justify="right", style="yellow")
-                
-                # Assume standard baseline limit
-                limit = 128000
-                
-                table.add_row("Base System Prompt", f"{bd['base_system']:,}", f"{bd['base_system']/limit:.2%}")
-                table.add_row("Active Rules", f"{bd['rules']:,}", f"{bd['rules']/limit:.2%}")
-                table.add_row("Skills Metadata", f"{bd['skills_metadata']:,}", f"{bd['skills_metadata']/limit:.2%}")
-                table.add_row("Active Skills Body", f"{bd['skills_body']:,}", f"{bd['skills_body']/limit:.2%}")
-                table.add_row("Tool Schemas", f"{bd['tools']:,}", f"{bd['tools']/limit:.2%}")
-                table.add_row("Conversation History", f"{bd['history']:,}", f"{bd['history']/limit:.2%}")
-                table.add_section()
-                table.add_row("Total Usage", f"{bd['total']:,}", f"{bd['total']/limit:.2%}", style="bold")
-                
-                console.print()
-                console.print(table)
-                console.print(f"[dim]Note: Percentages are calculated relative to a standard {limit:,} tokens limit.[/dim]")
-                continue
-
-            if user_input.lower().startswith("/loop"):
-                prompt_content = user_input[5:].strip()
-                if not prompt_content:
-                    console.print("[yellow]Usage: /loop <your prompt>[/yellow]")
-                    console.print("[dim]Runs the agent with a large step limit (10000) to execute long tasks without early handover interrupts.[/dim]")
-                    continue
-                
-                # Run with 10000 steps limit
-                original_max_steps = agent.max_steps
-                agent.max_steps = 10000
-                console.print()
-                console.print(Panel(
-                    f"[bold red]🔄 Loop Mode (Step Limit Removed - 10000 Steps max):[/bold red] {prompt_content}", 
-                    border_style="red"
-                ))
-                agent.run(prompt_content)
-                agent.max_steps = original_max_steps
-                
-                # Clean up checkpoint if completed successfully
-                if agent.exit_reason != "MAX_STEPS_REACHED":
-                    if os.path.exists(checkpoint_file):
-                        try:
-                            os.remove(checkpoint_file)
-                            console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
-                        except Exception:
-                            pass
-                first_turn = False
-                continue
-
-            console.print()
-            console.print(Panel(
-                f"[bold cyan]Objective:[/bold cyan] {user_input}", 
-                border_style="cyan"
-            ))
-            agent.run(user_input)
-
-            # Clean up checkpoint if completed successfully
-            if agent.exit_reason != "MAX_STEPS_REACHED":
-                if os.path.exists(checkpoint_file):
-                    try:
-                        os.remove(checkpoint_file)
-                        console.print("[dim]✓ Cleaned up checkpoint file.[/dim]")
-                    except Exception:
-                        pass
-            
-            first_turn = False
+if __name__ == "__main__":
+    run_cli()
