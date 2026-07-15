@@ -59,7 +59,24 @@ class OpenAIProvider(BaseLLMProvider):
             )
 
         choice_message = response.choices[0].message
-        return self._parse_response(choice_message)
+        chat_msg = self._parse_response(choice_message)
+        if chat_msg.response_metadata is None:
+            chat_msg.response_metadata = {}
+        chat_msg.response_metadata["model_name"] = self.model_name
+        if hasattr(response, "usage") and response.usage:
+            chat_msg.response_metadata.update({
+                "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+                "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+                "total_tokens": getattr(response.usage, "total_tokens", 0),
+            })
+        else:
+            chat_msg.response_metadata.update({
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            })
+        return chat_msg
+
 
     def _convert_messages(self, messages: List[ChatMessage]) -> List[Dict[str, Any]]:
         converted = []

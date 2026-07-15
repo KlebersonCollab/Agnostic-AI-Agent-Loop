@@ -1,12 +1,14 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `memory_refactoring` is completed and reviewed.
-- **Progress**: 100% complete. Modularized `memory.py` by extracting database schema templates and init functions into the new `memory/` package.
+- **Current Task**: None. Feature `cost_control` is fully completed, tested, and reviewed.
+- **Progress**: 100% complete.
 - **Next Steps**:
   - Await next instructions from user.
 
+
 ## 💡 Decisions Log
+- **2026-07-15 - Cost Control Hook (post_api_request)**: Implement session-level cost control and token/latency ledger by introducing `response_metadata` to ChatMessage, tracking metrics in OpenAI, Gemini, and Anthropic providers, and implementing a hook in `.agents/hooks/post_api_request/cost_control.py` that alerts when configured limits are exceeded. (Completed)
 - **2026-07-15 - Database Modularization**: Refactor `memory.py` into a package structure `memory/` to separate concerns (SQL schema setup DDL, core database query methods), improving readability. (Completed)
 - **2026-07-15 - Agent Modularization**: Refactor `agent.py` into a package structure `agent/` to separate concerns (prompts, listener base interface, core loop execution), improving code readability and modularity. (Completed)
 - **2026-07-15 - CLI Modularization & TUI separation**: Extract TUI concerns (`ConsoleAgentListener`, welcome banner, runner loops, slash commands) from `cli.py` to a dedicated `tui/` package to improve modularity and single responsibility. (Completed)

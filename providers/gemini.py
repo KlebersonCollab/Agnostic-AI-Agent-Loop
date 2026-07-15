@@ -59,7 +59,24 @@ class GeminiProvider(BaseLLMProvider):
             config=config
         )
 
-        return self._parse_response(response)
+        chat_msg = self._parse_response(response)
+        if chat_msg.response_metadata is None:
+            chat_msg.response_metadata = {}
+        chat_msg.response_metadata["model_name"] = self.model_name
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            chat_msg.response_metadata.update({
+                "prompt_tokens": getattr(response.usage_metadata, "prompt_token_count", 0),
+                "completion_tokens": getattr(response.usage_metadata, "candidates_token_count", 0),
+                "total_tokens": getattr(response.usage_metadata, "total_token_count", 0),
+            })
+        else:
+            chat_msg.response_metadata.update({
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            })
+        return chat_msg
+
 
     def _convert_messages(self, messages: List[ChatMessage]) -> List[Any]:
         from google.genai import types

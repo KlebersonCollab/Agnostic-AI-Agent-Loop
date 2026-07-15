@@ -33,6 +33,8 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[List[ToolCall]] = None
     tool_call_id: Optional[str] = None
     name: Optional[str] = None
+    response_metadata: Optional[Dict[str, Any]] = None
+
 
 # Standardized tool definition representation
 class ToolDefinition(BaseModel):
@@ -115,7 +117,14 @@ class BaseLLMProvider(ABC):
         Public entry point with built-in retry and backoff safety.
         Delegates the actual LLM call to subclasses.
         """
-        return self._generate(messages, tools, temperature, max_tokens)
+        start_time = time.time()
+        res = self._generate(messages, tools, temperature, max_tokens)
+        duration = time.time() - start_time
+        if res.response_metadata is None:
+            res.response_metadata = {}
+        res.response_metadata["latency"] = duration
+        return res
+
 
     @abstractmethod
     def _generate(

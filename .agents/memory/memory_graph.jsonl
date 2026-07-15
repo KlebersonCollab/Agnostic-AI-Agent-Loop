@@ -117,9 +117,7 @@
 {"type":"entity","name":"memory","entityType":"Module","observations":["Pacote que encapsula banco de dados SQLite local, FTS5 e isolamento de categorias","Subdividido em core.py, schema.py"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"agnostic-agent","to":"memory","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"agent","to":"memory","relationType":"USES","state":"current"}
-
-
-
-
-
-
+{"type":"entity","name":"cost_control","entityType":"Feature","observations":["Feature que implementa controle de custo de sessão e ledger de consumo de tokens/latência por chamada","Consome SESSION_COST_LIMIT e SESSION_TOKEN_LIMIT e emite avisos coloridos Rich no console"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"cost_control","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"post_api_request","to":"cost_control","relationType":"TRIGGERS","state":"current"}
+{"type":"observation","entityName":"cost_control","contents":["Salva metadados da API (prompt/completion/total tokens, model_name, latency) no ChatMessage.response_metadata","Testado e validado em tests/test_cost_control.py"],"state":"current","confidence":"high"}

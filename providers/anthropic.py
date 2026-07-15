@@ -49,7 +49,26 @@ class AnthropicProvider(BaseLLMProvider):
             params["tools"] = anthropic_tools
 
         response = self.client.messages.create(**params)
-        return self._parse_response(response)
+        chat_msg = self._parse_response(response)
+        if chat_msg.response_metadata is None:
+            chat_msg.response_metadata = {}
+        chat_msg.response_metadata["model_name"] = self.model_name
+        if hasattr(response, "usage") and response.usage:
+            prompt_tokens = getattr(response.usage, "input_tokens", 0)
+            completion_tokens = getattr(response.usage, "output_tokens", 0)
+            chat_msg.response_metadata.update({
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+            })
+        else:
+            chat_msg.response_metadata.update({
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            })
+        return chat_msg
+
 
     def _convert_messages(self, messages: List[ChatMessage]) -> List[Dict[str, Any]]:
         raw_msgs = []
