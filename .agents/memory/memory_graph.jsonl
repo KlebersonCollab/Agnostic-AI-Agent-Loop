@@ -121,3 +121,11 @@
 {"type":"relation","from":"agnostic-agent","to":"cost_control","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"post_api_request","to":"cost_control","relationType":"TRIGGERS","state":"current"}
 {"type":"observation","entityName":"cost_control","contents":["Salva metadados da API (prompt/completion/total tokens, model_name, latency) no ChatMessage.response_metadata","Testado e validado em tests/test_cost_control.py"],"state":"current","confidence":"high"}
+{"type":"entity","name":"security_shield","entityType":"Feature","observations":["Hook de segurança que remove chaves de API/tokens de env e impede path traversal outside CWD"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"performance_tracker","entityType":"Feature","observations":["Profiler de latência de ferramentas que exibe relatório Rich formatado no encerramento da sessão"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"context_pruner","entityType":"Feature","observations":["Hook de mitigação de tokens que poda o miolo do histórico mantendo o prompt de sistema, primeiro input e últimos passos"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"entity","name":"self_healing","entityType":"Feature","observations":["Hook de robustez que traduz exceções comuns de ferramenta para dicas construtivas acionáveis no ReAct loop"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"hooks_system","to":"security_shield","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"hooks_system","to":"performance_tracker","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"hooks_system","to":"context_pruner","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"hooks_system","to":"self_healing","relationType":"CONTAINS","state":"current"}
