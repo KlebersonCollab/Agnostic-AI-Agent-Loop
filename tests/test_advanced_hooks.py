@@ -101,3 +101,45 @@ def test_performance_tracker(monkeypatch):
         # Check that stats got reset
         assert sys._tool_perf_stats == {}
 
+def test_context_pruning(monkeypatch):
+    pruner = load_hook("pre_api_request/context_pruner.py")
+    
+    # 1. Below threshold, should do nothing
+    monkeypatch.setenv("CONTEXT_PRUNE_LIMIT", "1000")
+    messages = [
+        ChatMessage(role=MessageRole.SYSTEM, content="System prompt"),
+        ChatMessage(role=MessageRole.USER, content="Hello"),
+    ]
+    mod_messages, _ = pruner.handler(messages, [])
+    assert len(mod_messages) == 2
+    assert mod_messages[0].content == "System prompt"
+    
+    # 2. Exceeds threshold but too few messages to prune safely
+    large_text = "x" * 5000  # ~1250 tokens
+    messages_few = [
+        ChatMessage(role=MessageRole.SYSTEM, content="System prompt"),
+        ChatMessage(role=MessageRole.USER, content=large_text),
+    ]
+    mod_messages, _ = pruner.handler(messages_few, [])
+    assert len(mod_messages) == 2
+    
+    # 3. Exceeds threshold and has enough messages (e.g. system, user, and 15 more)
+    messages_many = [
+        ChatMessage(role=MessageRole.SYSTEM, content="System prompt"),
+        ChatMessage(role=MessageRole.USER, content="First user message"),
+    ]
+    for i in range(15):
+        messages_many.append(ChatMessage(role=MessageRole.ASSISTANT, content=f"Response {i} " + "y" * 300))
+        
+    original_len = len(messages_many) # 17
+    mod_messages, _ = pruner.handler(messages_many, [])
+    
+    # Should prune to: system + first user + placeholder + last 10 = 13 messages
+    assert len(mod_messages) == 13
+    assert mod_messages[0].content == "System prompt"
+    assert mod_messages[1].content == "First user message"
+    assert "pruned" in mod_messages[2].content
+    assert mod_messages[2].role == MessageRole.SYSTEM
+    assert mod_messages[-1].content.startswith("Response 14")
+
+
