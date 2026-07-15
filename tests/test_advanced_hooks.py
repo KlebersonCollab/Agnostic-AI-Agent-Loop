@@ -56,3 +56,48 @@ def test_security_shield_tool_blocking():
     name, args = pre_tool_shield.handler("view_file", {"AbsolutePath": "src/main.py"})
     assert name == "view_file"
     assert args["AbsolutePath"] == "src/main.py"
+
+def test_performance_tracker(monkeypatch):
+    # Initialize/Reset metrics
+    if hasattr(sys, "_tool_perf_stats"):
+        sys._tool_perf_stats = {}
+    if hasattr(sys, "_tool_start_times"):
+        sys._tool_start_times = {}
+
+    pre_perf = load_hook("pre_tool_call/performance_tracker.py")
+    post_perf = load_hook("post_tool_call/performance_tracker.py")
+    complete_perf = load_hook("on_session_complete/performance_tracker.py")
+    
+    # 1. Trigger pre_tool_call
+    pre_perf.handler("grep_search", {"Query": "test"})
+    assert len(sys._tool_start_times) == 1
+    
+    # Fake time sleep by updating the start time manually in test to simulate duration
+    import time
+    thread_id = list(sys._tool_start_times.keys())[0][0]
+    sys._tool_start_times[(thread_id, "grep_search")] = time.time() - 0.250
+    
+    # 2. Trigger post_tool_call
+    post_perf.handler("grep_search", {"Query": "test"}, "success")
+    assert len(sys._tool_start_times) == 0
+    assert "grep_search" in sys._tool_perf_stats
+    assert sys._tool_perf_stats["grep_search"]["calls"] == 1
+    assert sys._tool_perf_stats["grep_search"]["total_time"] >= 0.24
+    
+    # Add a second call to verify accumulation
+    pre_perf.handler("grep_search", {"Query": "test"})
+    thread_id = list(sys._tool_start_times.keys())[0][0]
+    sys._tool_start_times[(thread_id, "grep_search")] = time.time() - 0.150
+    post_perf.handler("grep_search", {"Query": "test"}, "success")
+    
+    assert sys._tool_perf_stats["grep_search"]["calls"] == 2
+    assert sys._tool_perf_stats["grep_search"]["total_time"] >= 0.39
+    
+    # 3. Trigger session complete and mock console to verify printing
+    from unittest.mock import patch
+    with patch("rich.console.Console.print") as mock_print:
+        complete_perf.handler(None)
+        assert mock_print.called
+        # Check that stats got reset
+        assert sys._tool_perf_stats == {}
+
