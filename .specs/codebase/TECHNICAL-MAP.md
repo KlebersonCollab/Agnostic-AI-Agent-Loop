@@ -4,9 +4,9 @@
 > This file is an index. Detailed evidence lives in the linked files below.
 
 ## Summary
-- **What it is:** A provider-agnostic autonomous AI agent loop with parallel multi-agent orchestration and a Rich terminal UI. Python 3.14+, managed with `uv`.
-- **Core loop:** `main.py` → `cli.run_cli()` → `Agent.run()` (ReAct: think → tool call → observe → repeat), with a dynamic system prompt compiled each step by `ContextBuilder`.
-- **Extensibility points:** add providers (subclass `BaseLLMProvider` + register in `get_provider`), add tools (append one entry to `REGISTERED_TOOLS` in `tools/__init__.py`), add skills/rules (drop files in `.agents/`).
+- **What it is:** A provider-agnostic autonomous AI agent loop with parallel multi-agent orchestration, async delegation, a hooks system, and a Rich terminal UI. Python 3.14+, managed with `uv`, package version `0.6.0`.
+- **Core loop:** `main.py` → `cli.run_cli()` → `Agent.run()` (`agent/core.py`, ReAct: think → tool call → observe → repeat), with a dynamic system prompt compiled each step by `ContextBuilder` (`context/builder.py`).
+- **Extensibility points:** add providers (subclass `BaseLLMProvider` + register in `get_provider`); add tools (append one entry to `REGISTERED_TOOLS` in `tools/__init__.py`); add skills/rules (drop files in `.agents/`); add hooks (`.agents/hooks/<event>/*.py`); add MCP servers (`.agents/mcp/<server>.json`).
 
 ## Artifact Index
 | File | Purpose |
@@ -17,10 +17,10 @@
 | [CONCERNS.md](CONCERNS.md) | Technical debt, fragile/untested areas, security & performance risks, mandatory paths. |
 
 ## Quick Risk Snapshot (see CONCERNS.md for evidence)
-- **Highest priority gaps:** `GeminiProvider`/`AnthropicProvider` and `cli.py`/`multi_agent.py` have **no unit tests**; `retry_with_backoff` untested.
-- **Structural risk (RESOLVED):** `tools/__init__.py` now uses a single `REGISTERED_TOOLS` source of truth with import-time validation — no manual dual-sync needed.
-- **Dead config:** `.agents/mcp/*.json` present but unused.
-- **Latent:** hand-rolled YAML frontmatter parser in `ContextBuilder`; prefix-based path guard in `io_tools.py`.
+- **Highest priority gaps:** `GeminiProvider`/`AnthropicProvider` `_generate()` and `retry_with_backoff` have **no unit tests**; `cli.py` full bootstrap is only manually tested.
+- **RESOLVED:** `tools/__init__.py` uses a single `REGISTERED_TOOLS` source of truth with import-time validation (no manual dual-sync). MCP configs (`drawio`, `playwright`) ARE used by `MCPManager`. `pyproject.toml` HAS `[build-system]` + `[project.scripts]`.
+- **Latent:** hand-rolled YAML frontmatter parser in `ContextBuilder` (`context/builder.py`); path guard in `io_tools.py` (`pathlib` `relative_to`).
+- **NEW covered:** hooks (`test_hooks.py`), memory graph (`test_memory_graph.py`), concurrent tool execution (`test_concurrent_tool_execution.py`), context builder/references/breakdown, async delegation (`test_async_delegation.py`), orchestrator (`test_agent_orchestrator.py`), cli loop (`test_cli_loop.py`).
 
 ## How to Use This Map
 - Before planning a new feature, read `ARCHITECTURE.md` (patterns) + `CONCERNS.md` (risks).
