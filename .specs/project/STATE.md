@@ -1,12 +1,13 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `agent_refactoring` is completed and reviewed.
-- **Progress**: 100% complete. Modularized `agent.py` by extracting prompts, observer listener interfaces, and the ReAct execution loop into the new `agent/` package.
+- **Current Task**: None. Feature `memory_refactoring` is completed and reviewed.
+- **Progress**: 100% complete. Modularized `memory.py` by extracting database schema templates and init functions into the new `memory/` package.
 - **Next Steps**:
   - Await next instructions from user.
 
 ## 💡 Decisions Log
+- **2026-07-15 - Database Modularization**: Refactor `memory.py` into a package structure `memory/` to separate concerns (SQL schema setup DDL, core database query methods), improving readability. (Completed)
 - **2026-07-15 - Agent Modularization**: Refactor `agent.py` into a package structure `agent/` to separate concerns (prompts, listener base interface, core loop execution), improving code readability and modularity. (Completed)
 - **2026-07-15 - CLI Modularization & TUI separation**: Extract TUI concerns (`ConsoleAgentListener`, welcome banner, runner loops, slash commands) from `cli.py` to a dedicated `tui/` package to improve modularity and single responsibility. (Completed)
 - **2026-07-14 - SQLite Concurrency and Transaction Rollback**: Plan, specify, and implement global DB serialization, a 30s connection timeout, and explicit rollbacks on write failures to prevent deadlocks and lock leaks during multi-agent concurrent writes. (Completed)

@@ -1,9 +1,12 @@
 import os
-import sqlite3
 import json
+import sqlite3
 import threading
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+
+from memory.schema import initialize_schema
+
 
 class AgentMemory:
     """
@@ -23,75 +26,8 @@ class AgentMemory:
         with self.lock:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30.0)
             self.conn.row_factory = sqlite3.Row
-            self._init_db()
-
-    def _init_db(self):
-        with self.lock:
             try:
-                cursor = self.conn.cursor()
-                
-                # Enable Foreign Keys support
-                cursor.execute("PRAGMA foreign_keys = ON;")
-                
-                # 1. Sessions table
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS sessions (
-                        session_id TEXT PRIMARY KEY,
-                        timestamp TEXT NOT NULL,
-                        project_path TEXT NOT NULL,
-                        task_prompt TEXT NOT NULL,
-                        final_summary TEXT,
-                        handover_report TEXT
-                    )
-                """)
-                
-                # 2. Episodes table (individual thoughts / tool calls per step)
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS episodes (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        session_id TEXT NOT NULL,
-                        step_number INTEGER NOT NULL,
-                        role TEXT NOT NULL,
-                        content TEXT,
-                        tool_calls TEXT,
-                        timestamp TEXT NOT NULL,
-                        FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE
-                    )
-                """)
-                
-                # 3. File Outlines table
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS file_outlines (
-                        filename TEXT PRIMARY KEY,
-                        timestamp TEXT NOT NULL,
-                        outline TEXT NOT NULL
-                    )
-                """)
-                
-                # 4. FTS5 Virtual Table for full-text search
-                try:
-                    cursor.execute("""
-                        CREATE VIRTUAL TABLE IF NOT EXISTS fts_memory USING fts5(
-                            session_id UNINDEXED,
-                            episode_id UNINDEXED,
-                            category,
-                            content,
-                            tokenize='porter'
-                        )
-                    """)
-                except sqlite3.OperationalError:
-                    # Fallback to FTS4 if FTS5 is not available
-                    cursor.execute("""
-                        CREATE VIRTUAL TABLE IF NOT EXISTS fts_memory USING fts4(
-                            session_id,
-                            episode_id,
-                            category,
-                            content,
-                            tokenize=porter
-                        )
-                    """)
-                    
-                self.conn.commit()
+                initialize_schema(self.conn)
             except Exception:
                 self.conn.rollback()
                 raise

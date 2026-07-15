@@ -111,9 +111,13 @@
 {"type":"entity","name":"tui","entityType":"Module","observations":["Pacote que isola e modulariza lógica de apresentação e loops de execução do terminal","Contém listener.py, commands.py, helpers.py, runner.py"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"cli.py","to":"tui","relationType":"DELEGATES_TO","state":"current"}
 {"type":"relation","from":"agnostic-agent","to":"tui","relationType":"CONTAINS","state":"current"}
-{"type":"entity","name":"agent","entityType":"Module","observations":["Pacote que gerencia o loop ReAct, concorrência de chamadas de ferramentas e hooks","Subdividido em core.py, prompts.py, listener.py"],"role":"core","state":"current","confidence":"high"}
+{"type":"entity","name":"agent","entityType":"Module","observations":["Pacote que gerencia o loop ReAct, concorrência de chamadas de ferramentas e hooks","Subdividido em core.py, prompts.py, listener.py"],"role":"architecture","state":"current","confidence":"high"}
 {"type":"relation","from":"agnostic-agent","to":"agent","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"agent","to":"tui","relationType":"NOTIFIES","state":"current"}
+{"type":"entity","name":"memory","entityType":"Module","observations":["Pacote que encapsula banco de dados SQLite local, FTS5 e isolamento de categorias","Subdividido em core.py, schema.py"],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"memory","relationType":"CONTAINS","state":"current"}
+{"type":"relation","from":"agent","to":"memory","relationType":"USES","state":"current"}
+
 
 
 
