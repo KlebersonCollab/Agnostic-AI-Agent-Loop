@@ -129,3 +129,7 @@
 {"type":"relation","from":"hooks_system","to":"performance_tracker","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"hooks_system","to":"context_pruner","relationType":"CONTAINS","state":"current"}
 {"type":"relation","from":"hooks_system","to":"self_healing","relationType":"CONTAINS","state":"current"}
+{"type":"entity","name":"harness_capability_benchmark","entityType":"Feature","observations":["Harness de benchmark que avalia a diferença de capacidade e consumo entre o modo Classic (agente único) e Orchestrator (orquestrador/subagentes).","Resultados mostram que ambos os modos resolvem as tarefas propostas (sucesso de 100% no benchmark).","Modo Orchestrator consome ~50% menos tokens e requer menos passos de ReAct do que Classic.","Modo Classic tem menor latência de execução em tarefas operacionais por não ter a sobrecarga de spawnar subagentes."],"role":"architecture","state":"current","confidence":"high"}
+{"type":"relation","from":"agnostic-agent","to":"harness_capability_benchmark","relationType":"CONTAINS","state":"current"}
+{"type":"entity","name":"classic_mode_by_default","entityType":"Feature","observations":["Decisão arquitetural: Mudar o modo de execução padrão do CLI de 'orchestrator' para 'classic'.","Isto garante acesso total a ferramentas operacionais com suporte à delegação a subagentes sob demanda (melhor dos dois mundos)."],"role":"decision","state":"current","confidence":"high"}
+{"type":"relation","from":"cli.py","to":"classic_mode_by_default","relationType":"IMPLEMENTS","state":"current"}

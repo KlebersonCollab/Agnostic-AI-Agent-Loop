@@ -1,13 +1,15 @@
 # Project State & Context
 
 ## 🏁 Session Status
-- **Current Task**: None. Feature `cost_control` is fully completed, tested, and reviewed.
+- **Current Task**: Default CLI Mode changed to 'classic' (completed and verified).
 - **Progress**: 100% complete.
 - **Next Steps**:
   - Await next instructions from user.
 
 
 ## 💡 Decisions Log
+- **2026-07-15 - Default CLI Mode Change**: Updated the default execution mode in `cli.py` from 'orchestrator' to 'classic' to provide a superior hybrid workflow by default. Added integration tests to verify the argument parser behavior. (Completed)
+- **2026-07-15 - Capability Benchmark Harness**: Developed a comparative capability benchmark script in `scripts/benchmark_modes.py` to compare Classic and Orchestrator modes across three operational/cognitive tasks, validating performance, steps, tokens, and latency. (Completed)
 - **2026-07-15 - Advanced Hooks Implementation**: Plan, specify, and implement four advanced hooks: Security Shield (redacting env keys and blocking path traversals in `pre_api_request`/`pre_tool_call`/`post_tool_call`), Performance Tracker (profiling execution latency and outputting a Rich table on completion), Context Pruner (compressing history if above limit in `pre_api_request`), and Self-Healing (translating tool exceptions to helpful tips in `on_tool_error`). (Completed)
 - **2026-07-15 - Cost Control Hook (post_api_request)**: Implement session-level cost control and token/latency ledger by introducing `response_metadata` to ChatMessage, tracking metrics in OpenAI, Gemini, and Anthropic providers, and implementing a hook in `.agents/hooks/post_api_request/cost_control.py` that alerts when configured limits are exceeded. (Completed)
 - **2026-07-15 - Database Modularization**: Refactor `memory.py` into a package structure `memory/` to separate concerns (SQL schema setup DDL, core database query methods), improving readability. (Completed)

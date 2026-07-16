@@ -91,3 +91,18 @@ def test_cli_mode_parsing(mock_agent_class, mock_get_provider, mock_parse_args):
     assert kwargs["system_prompt"] == ORCHESTRATOR_SYSTEM_PROMPT
     tool_names = {t.name for t in kwargs["tools"]}
     assert tool_names == ORCHESTRATOR_TOOL_NAMES
+
+
+@patch("cli.get_provider")
+@patch("cli.Agent")
+@patch("cli.sys.argv", ["cli.py", "--prompt", "test"])
+def test_cli_default_mode_is_classic(mock_agent_class, mock_get_provider):
+    mock_provider = MagicMock()
+    mock_get_provider.return_value = mock_provider
+    try:
+        run_cli()
+    except SystemExit:
+        pass
+    mock_agent_class.assert_called_once()
+    kwargs = mock_agent_class.call_args[1]
+    assert kwargs["system_prompt"] == SYSTEM_PROMPT

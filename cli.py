@@ -68,7 +68,7 @@ def run_cli():
         "--mode", 
         type=str, 
         choices=["orchestrator", "classic"],
-        default="orchestrator",
+        default="classic",
         help="Agent execution mode: 'orchestrator' (strategic leader) or 'classic' (monolithic)"
     )
     parser.add_argument(
