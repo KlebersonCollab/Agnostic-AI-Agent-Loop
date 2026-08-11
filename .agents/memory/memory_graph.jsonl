@@ -28,13 +28,13 @@
 {"type":"entity","name":"front/","entityType":"Package","observations":["Frontend do grafo de conhecimento persistente (memory_graph.jsonl)","index.html: Bootstrap 5 + vis-network (CDN); grafo interativo, busca, filtro por tipo","server.py: servidor HTTP leve (somente stdlib) que sobe em background com o agente","Expõe /api/memory.jsonl lendo .agents/memory/memory_graph.jsonl do disco (CORS *)","Iniciado automaticamente em run_cli() via thread daemon; flags --front-host/--front-port/--no-front"]}
 {"type":"entity","name":"Memory Graph Frontend","entityType":"Feature","observations":["Visualizador web do grafo de memória; parte do projeto, sobe junto do agente","Nós=entidades, arestas=relações, colorido por entityType","Auto-abre navegador; fallback de seleção de arquivo manual","Sem necessidade de python -m http.server manual"]}
 {"type":"relation","from":"agnostic-agent","to":"front/","relationType":"CONTAINS"}
-{"type":"relation","from":"front/","to":"Memory Graph Frontend","relationType":"IMPLEMENTS"}
-{"type":"relation","from":"cli.py","to":"Memory Graph Frontend","relationType":"STARTS"}
-{"type":"relation","from":"agnostic-agent","to":"main.py","relationType":"CONTAINS"}
-{"type":"entity","name":"Ignore Rules Parsing","entityType":"Feature","observations":["tools/io_tools.py: list_project_files e search_grep lêem .gitignore e .dockerignore dinamicamente","Filtra dependências (node_modules, dist, .venv, build) e padrões customizados de ignore antes da travessia","Impede estouros gigantescos de token ao rodar o agente em projetos web/JS com dependências pesadas"]}
-{"type":"entity","name":"Structured Context Pruner","entityType":"Feature","observations":[".agents/hooks/pre_api_request/context_pruner.py: extrai resumo estruturado das mensagens podadas","Preserva objetivo inicial, subagentes/delegações acionados, arquivos modificados e resultados de testes na mensagem de substituição","Notifica visualmente no console o ganho de tokens obtido com a poda"]}
-{"type":"relation","from":"agnostic-agent","to":"Ignore Rules Parsing","relationType":"IMPLEMENTS"}
-{"type":"relation","from":"agnostic-agent","to":"Structured Context Pruner","relationType":"IMPLEMENTS"}
+{"type":"entity","name":"Secret Leak Preventer","entityType":"Feature","observations":[".agents/hooks/post_tool_call/secret_leak_preventer.py: intercepta retornos de ferramentas e censura API keys, chaves SSH, tokens AWS/GitHub/Slack em tempo real antes de irem pro histórico"]}
+{"type":"entity","name":"Command Sandbox","entityType":"Feature","observations":[".agents/hooks/pre_tool_call/command_sandbox.py: inspeciona comandos do terminal e bloqueia operações altamente perigosas (rm -rf /, mkfs, dd, reverse shell)"]}
+{"type":"entity","name":"Session Digest Logger","entityType":"Feature","observations":[".agents/hooks/on_session_complete/session_digest_logger.py: gera relatório em Markdown com auditoria completa de arquivos alterados, passos e ferramentas ao finalizar a sessão"]}
+{"type":"relation","from":"agnostic-agent","to":"Secret Leak Preventer","relationType":"IMPLEMENTS"}
+{"type":"relation","from":"agnostic-agent","to":"Command Sandbox","relationType":"IMPLEMENTS"}
+{"type":"entity","name":"Pattern Extractor","entityType":"Feature","observations":[".agents/hooks/on_session_complete/pattern_extractor.py: analisa sessões concluídas com sucesso e salva o fluxo da solução em .specs/knowledge/patterns/<slug>.md para aprendizado contínuo"]}
+{"type":"relation","from":"agnostic-agent","to":"Pattern Extractor","relationType":"IMPLEMENTS"}
 {"type":"relation","from":"agnostic-agent","to":"Python 3.14","relationType":"USES"}
 {"type":"relation","from":"agnostic-agent","to":"uv","relationType":"USES"}
 {"type":"relation","from":"agnostic-agent","to":"pytest","relationType":"USES"}

