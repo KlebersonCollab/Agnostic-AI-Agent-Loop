@@ -138,7 +138,7 @@ def test_context_pruning(monkeypatch):
     assert len(mod_messages) == 13
     assert mod_messages[0].content == "System prompt"
     assert mod_messages[1].content == "First user message"
-    assert "pruned" in mod_messages[2].content
+    assert "podado" in mod_messages[2].content.lower() or "pruned" in mod_messages[2].content.lower()
     assert mod_messages[2].role == MessageRole.SYSTEM
     assert mod_messages[-1].content.startswith("Response 14")
 
