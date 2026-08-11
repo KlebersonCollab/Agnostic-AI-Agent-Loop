@@ -33,6 +33,8 @@
 {"type":"entity","name":"Session Digest Logger","entityType":"Feature","observations":[".agents/hooks/on_session_complete/session_digest_logger.py: gera relatório em Markdown com auditoria completa de arquivos alterados, passos e ferramentas ao finalizar a sessão"]}
 {"type":"relation","from":"agnostic-agent","to":"Secret Leak Preventer","relationType":"IMPLEMENTS"}
 {"type":"relation","from":"agnostic-agent","to":"Command Sandbox","relationType":"IMPLEMENTS"}
+{"type":"entity","name":"Loop Detector","entityType":"Feature","observations":[".agents/hooks/pre_tool_call/loop_detector.py: monitora chamadas repetitivas de ferramentas com argumentos idênticos; bloqueia após 3 tentativas consecutivas e obriga o agente a mudar de estratégia"]}
+{"type":"relation","from":"agnostic-agent","to":"Loop Detector","relationType":"IMPLEMENTS"}
 {"type":"entity","name":"Pattern Extractor","entityType":"Feature","observations":[".agents/hooks/on_session_complete/pattern_extractor.py: analisa sessões concluídas com sucesso e salva o fluxo da solução em .specs/knowledge/patterns/<slug>.md para aprendizado contínuo"]}
 {"type":"relation","from":"agnostic-agent","to":"Pattern Extractor","relationType":"IMPLEMENTS"}
 {"type":"relation","from":"agnostic-agent","to":"Python 3.14","relationType":"USES"}

@@ -256,5 +256,29 @@ def test_pattern_extractor(tmp_path, monkeypatch):
     assert "config.py" in content
 
 
+def test_loop_detector():
+    loop_pre = load_hook("pre_tool_call/loop_detector.py")
+    loop_post = load_hook("post_tool_call/security_shield.py")
+
+    cmd_args = {"CommandLine": "python -c 'import missing'"}
+
+    # Call 1: Normal
+    name1, _ = loop_pre.handler("execute_command", cmd_args)
+    assert name1 == "execute_command"
+
+    # Call 2: Normal
+    name2, _ = loop_pre.handler("execute_command", cmd_args)
+    assert name2 == "execute_command"
+
+    # Call 3: Loop detected!
+    name3, _ = loop_pre.handler("execute_command", cmd_args)
+    assert name3 == "loop_blocked"
+
+    # Post tool handler intercept
+    res = loop_post.handler(name3, cmd_args, "dummy")
+    assert "REPETITIVE LOOP DETECTED" in res
+    assert "STOP repeating" in res
+
+
 
 
