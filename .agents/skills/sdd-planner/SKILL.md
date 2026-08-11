@@ -4,7 +4,7 @@ version: 1.0.0
 description: "Planner agent for Spec Driven Development. Manages project vision, feature roadmaps, and persistent session memory (STATE.md)."
 last_update: "2026-05-22"
 category: project-planning
-keywords: ["sdd", "planner", "project-vision", "roadmap", "state-management", "spec-driven-development", "context-preservation", "feature-planning","plan", "planning", "approach", "strategy", "steps"]]
+keywords: ["sdd", "planner", "project-vision", "roadmap", "state-management", "spec-driven-development", "context-preservation", "feature-planning","plan", "planning", "approach", "strategy", "steps"]
 ---
 
 # SDD Planner Agent
