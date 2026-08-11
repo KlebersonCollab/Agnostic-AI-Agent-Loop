@@ -3,10 +3,17 @@ import re
 import ast
 import threading
 import subprocess
-from typing import Optional
+import fnmatch
+from typing import Optional, Set, List
 
 # Thread safety lock for writing/modifying operations
 _file_write_lock = threading.Lock()
+
+DEFAULT_IGNORED_DIRS = {
+    ".git", ".venv", "venv", "env", "__pycache__", ".pytest_cache",
+    ".idea", ".vscode", "node_modules", "dist", "build", ".next",
+    ".nuxt", "target", "vendor", ".cache", "coverage", ".turbo"
+}
 
 def _is_safe_path(filename: str) -> bool:
     """Verifies that the absolute path of the file resides strictly within the current working directory."""
@@ -18,28 +25,82 @@ def _is_safe_path(filename: str) -> bool:
     except (ValueError, Exception):
         return False
 
+
+def _load_ignore_patterns(base_path: str = ".") -> List[str]:
+    """
+    Reads .gitignore and .dockerignore from the base_path directory (and parent dirs up to cwd)
+    and returns a list of glob patterns to ignore.
+    """
+    patterns = []
+    ignore_filenames = [".gitignore", ".dockerignore"]
+    
+    for filename in ignore_filenames:
+        filepath = os.path.join(base_path, filename)
+        if os.path.isfile(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line = line.strip()
+                        # Ignore comments and empty lines
+                        if line and not line.startswith("#"):
+                            # Normalize pattern leading slash if present
+                            pattern = line.rstrip("/")
+                            if pattern.startswith("/"):
+                                pattern = pattern[1:]
+                            patterns.append(pattern)
+            except Exception:
+                pass
+    return patterns
+
+
+def _is_ignored(rel_path: str, is_dir: bool, ignore_patterns: List[str]) -> bool:
+    """Checks if a relative path matches any ignore patterns from .gitignore / .dockerignore."""
+    path_parts = rel_path.split(os.sep)
+    basename = path_parts[-1]
+    
+    for pattern in ignore_patterns:
+        # Match basename or full relative path or any parent segment
+        if fnmatch.fnmatch(basename, pattern) or fnmatch.fnmatch(rel_path, pattern):
+            return True
+        for part in path_parts:
+            if fnmatch.fnmatch(part, pattern):
+                return True
+    return False
+
+
 def list_project_files(path: str = ".") -> str:
-    """Lists files and folders in the specified directory recursively, ignoring virtual environments and git folders."""
+    """Lists files and folders in the specified directory recursively, ignoring default virtual environments, build dirs, and rules in .gitignore / .dockerignore."""
     try:
         if not _is_safe_path(path):
             return "Error: Access denied. Cannot list files outside the project directory."
-        ignored = {".git", ".venv", "__pycache__", ".pytest_cache", ".idea", ".vscode"}
+        
+        ignored_dirs = set(DEFAULT_IGNORED_DIRS)
+        custom_patterns = _load_ignore_patterns(path)
+
         output = []
         for root, dirs, files in os.walk(path):
-            # Modify dirs in-place to avoid traversing ignored directories
-            dirs[:] = [d for d in dirs if d not in ignored]
-            
-            # Get relative path for root
             rel_root = os.path.relpath(root, path)
             if rel_root == ".":
                 rel_root = ""
                 
+            # Filter dirs in-place to prevent traversing ignored directories
+            dirs[:] = [
+                d for d in dirs 
+                if d not in ignored_dirs and not _is_ignored(
+                    os.path.join(rel_root, d) if rel_root else d, 
+                    is_dir=True, 
+                    ignore_patterns=custom_patterns
+                )
+            ]
+            
             for d in dirs:
                 dir_path = os.path.join(rel_root, d) if rel_root else d
                 output.append(f"[DIR]  {dir_path}")
+                
             for f in files:
                 file_path = os.path.join(rel_root, f) if rel_root else f
-                output.append(f"[FILE] {file_path}")
+                if not _is_ignored(file_path, is_dir=False, ignore_patterns=custom_patterns):
+                    output.append(f"[FILE] {file_path}")
                 
         if not output:
             return "No files found."
@@ -146,7 +207,9 @@ def search_grep(query: str, path: str = ".", is_regex: bool = False, case_insens
     try:
         if not _is_safe_path(path):
             return "Error: Access denied. Cannot search outside the project directory."
-        ignored = {".git", ".venv", "__pycache__", ".pytest_cache", ".idea", ".vscode"}
+        
+        ignored_dirs = set(DEFAULT_IGNORED_DIRS)
+        custom_patterns = _load_ignore_patterns(path)
         flags = re.IGNORECASE if case_insensitive else 0
         
         # Compile pattern
@@ -157,13 +220,26 @@ def search_grep(query: str, path: str = ".", is_regex: bool = False, case_insens
             
         results = []
         for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if d not in ignored]
+            rel_root = os.path.relpath(root, path)
+            if rel_root == ".":
+                rel_root = ""
+
+            dirs[:] = [
+                d for d in dirs 
+                if d not in ignored_dirs and not _is_ignored(
+                    os.path.join(rel_root, d) if rel_root else d, 
+                    is_dir=True, 
+                    ignore_patterns=custom_patterns
+                )
+            ]
             
             for f in files:
+                file_path = os.path.join(rel_root, f) if rel_root else f
+                if _is_ignored(file_path, is_dir=False, ignore_patterns=custom_patterns):
+                    continue
+
                 # Search source/text files only
-                if f.endswith((".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml", ".ini", ".env", ".example")):
-                    file_path = os.path.relpath(os.path.join(root, f), path)
-                    
+                if f.endswith((".py", ".toml", ".md", ".txt", ".json", ".yaml", ".yml", ".ini", ".env", ".example", ".ts", ".js", ".vue", ".jsx", ".tsx", ".css", ".html")):
                     try:
                         with open(os.path.join(root, f), "r", encoding="utf-8", errors="ignore") as file_handle:
                             for line_num, line in enumerate(file_handle, 1):

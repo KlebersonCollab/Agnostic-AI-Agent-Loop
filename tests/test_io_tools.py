@@ -63,6 +63,24 @@ def test_list_project_files():
     assert "[FILE] tools/math_tools.py" in files_list or "tools/math_tools.py" in files_list
 
 
+def test_list_project_files_ignores_gitignore_and_dockerignore(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "main.py").write_text("print('hello')")
+    (tmp_path / "ignored_by_git.log").write_text("log data")
+    (tmp_path / "ignored_by_docker.tmp").write_text("tmp data")
+    (tmp_path / "normal.txt").write_text("normal file")
+    
+    (tmp_path / ".gitignore").write_text("*.log\n")
+    (tmp_path / ".dockerignore").write_text("*.tmp\n")
+    
+    files_list = list_project_files(str(tmp_path))
+    
+    assert "main.py" in files_list
+    assert "normal.txt" in files_list
+    assert "ignored_by_git.log" not in files_list
+    assert "ignored_by_docker.tmp" not in files_list
+
+
 def test_delete_file():
     from tools.io_tools import delete_file
     test_file = "test_delete_temp.txt"
